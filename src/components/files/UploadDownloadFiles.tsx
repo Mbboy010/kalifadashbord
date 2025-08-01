@@ -73,7 +73,7 @@ const UploadDownloadFiles: React.FC = () => {
       await addDoc(collection(db, 'download'), {
         title,
         version,
-        link: downloadUrl.href,
+        link: downloadUrl,
         appwriteFileId: uploadResponse.$id,
         createdAt: serverTimestamp(),
       });

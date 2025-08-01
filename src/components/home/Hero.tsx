@@ -94,7 +94,9 @@ export default function Hero() {
                 {key}
               </h2>
               <p
-                ref={(el) => (statsRefs.current[index] = el)}
+                ref={(el) => {
+                  statsRefs.current[index] = el;
+                }}
                 className="text-4xl md:text-5xl font-extrabold mt-4 text-white"
               >
                 {value}

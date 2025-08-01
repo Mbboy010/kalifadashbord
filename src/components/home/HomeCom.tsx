@@ -15,14 +15,14 @@ export default function HomeCom() {
           <div className="w-full h-full absolute top-0 left-0 ">
 <div style={{position: 'relative', height: '100%', overflow: 'hidden'}}>
   <RippleGrid
-    enableRainbow={true}
+    enableRainbow={false}
     gridColor="#ff3030"
-    rippleIntensity={0.2}
+    rippleIntensity={0.5}
     gridSize={17}
     gridThickness={2}
     mouseInteraction={true}
     mouseInteractionRadius={1.2}
-    opacity={0.8}
+    opacity={0.3}
   />
 </div>
           </div>

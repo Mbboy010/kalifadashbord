@@ -17,10 +17,10 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: {
-    default: "AsbeatCloud",
-    template: "%s - AsbeatCloud",
+    default: "kalifadashbord",
+    template: "%s - kalifadashbord",
   },
-  description: "Welcome to AsbeatCloud, your ultimate music platform! Explore home features, upload tracks, and discover instrumentals. Log in or sign up to start creating and sharing your music with a vibrant community."
+  description: "kalifadashbord"
 };
 
 

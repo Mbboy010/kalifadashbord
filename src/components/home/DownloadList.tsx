@@ -54,7 +54,9 @@ const ButtonList: React.FC = () => {
             return (
               <button
                 key={index}
-                ref={(el) => (buttonRefs.current[index] = el)}
+                ref={(el) => {
+                  buttonRefs.current[index] = el;
+                }}
                 onClick={button.onClick}
                 className="w-full flex items-center justify-start gap-3 px-4 py-3 rounded-lg bg-black/40 text-white hover:bg-red-600 transition-all"
               >

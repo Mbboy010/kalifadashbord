@@ -1,5 +1,6 @@
 'use client';
 
+import UserSummaryComponent from './UserSummaryComponent';
 import ButtonList from './DownloadList';
 import BarChart from './BarChart';
 import Content from './Content';
@@ -33,8 +34,10 @@ const Home: React.FC = () => {
       <Content />
       
       <ButtonList />
+ 
+        <UserSummaryComponent />
 
-
+        
     </div>
   );
 };

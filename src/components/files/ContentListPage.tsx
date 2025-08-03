@@ -136,7 +136,9 @@ const ContentListPage: React.FC = () => {
           {contents.map((item, index) => (
             <div
               key={item.id}
-              ref={(el) => (itemRefs.current[index] = el)}
+              ref={(el) => {
+                itemRefs.current[index] = el; // Updated: Assign without returning
+              }}
               className="flex items-center justify-between p-4 bg-black/40 backdrop-blur-md rounded-lg shadow-lg hover:bg-red-900/30 transition-all duration-300 relative overflow-visible z-10"
             >
               <div>
@@ -177,4 +179,3 @@ const ContentListPage: React.FC = () => {
 };
 
 export default ContentListPage;
-

@@ -59,7 +59,7 @@ const UserSummaryComponent: React.FC = () => {
         ease: 'power2.out',
       });
     }
-  }, [loading, users]);
+  });
 
   const handleSeeMore = () => {
     router.push('/users');

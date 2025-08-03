@@ -1,46 +1,49 @@
 'use client';
 
 import { useState, useEffect, ChangeEvent, FormEvent } from 'react';
-import { Upload, CheckCircle, Package } from 'lucide-react';
+import { Upload, CheckCircle } from 'lucide-react';
 import { gsap } from 'gsap';
-import { storage, ID } from '@/server/appwrite';
 import { addDoc, collection, serverTimestamp } from 'firebase/firestore';
 import { db } from '@/server/firebaseApi';
 
-interface FormData {
+type FormData = {
   title: string;
-  version: string;
-  file: File | null;
-}
+  link: string;
+  brand: string;
+};
 
-const UploadDownloadFiles: React.FC = () => {
+const BRANDS = ['samsung', 'infinix', 'tecno', 'others'] as const;
+type Brand = (typeof BRANDS)[number];
+
+const BRAND_CONFIG: Record<Brand, { label: string }> = {
+  samsung: { label: 'Samsung apps' },
+  infinix: { label: 'Infinix apps' },
+  tecno: { label: 'Tecno apps' },
+  others: { label: 'Others mobile apps' },
+};
+
+const SystemUpload: React.FC = () => {
   const [formData, setFormData] = useState<FormData>({
     title: '',
-    version: '',
-    file: null,
+    link: '',
+    brand: 'samsung',
   });
   const [uploadStatus, setUploadStatus] = useState<string>('');
   const [progress, setProgress] = useState<number>(0);
   const [remainingTime, setRemainingTime] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState<boolean>(false);
-  const [fileInputKey, setFileInputKey] = useState<number>(Date.now());
 
-  const handleChange = (e: ChangeEvent<HTMLInputElement>) => {
-    const { name, value, files } = e.target;
-    if (name === 'file' && files?.[0]) {
-      setFormData((prev) => ({ ...prev, file: files[0] }));
-    } else {
-      setFormData((prev) => ({ ...prev, [name]: value }));
-    }
+  const handleChange = (e: ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    const { name, value } = e.target;
+    setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
   const handleUpload = async (e: FormEvent) => {
-    e.preventDefault(); // Prevent form submission default behavior
+    e.preventDefault();
+    const { title, link, brand } = formData;
 
-    const { title, version, file } = formData;
-
-    if (!title || !version || !file) {
-      setUploadStatus('Please fill all fields and select a file!');
+    if (!title || !link || !brand) {
+      setUploadStatus('Please enter a title, command link, and select a brand!');
       return;
     }
 
@@ -50,31 +53,10 @@ const UploadDownloadFiles: React.FC = () => {
     setRemainingTime(null);
 
     try {
-      // Ensure environment variable is defined
-      const bucketId = "688cce34002223f15e42";
-      if (!bucketId) {
-        throw new Error('Storage bucket ID is not defined');
-      }
-
-      // Rename file with the title and preserve .apk extension
-      const renamedFile = new File([file], `${title}.apk`, {
-        type: file.type,
-        lastModified: file.lastModified,
-      });
-
-      const uploadResponse = await storage.createFile(
-        bucketId,
-        ID.unique(),
-        renamedFile
-      );
-
-      const downloadUrl = storage.getFileDownload(bucketId, uploadResponse.$id);
-
-      await addDoc(collection(db, 'download'), {
+      await addDoc(collection(db, 'contents', 'system', brand), {
         title,
-        version,
-        link: downloadUrl,
-        appwriteFileId: uploadResponse.$id,
+        link,
+        brand,
         createdAt: serverTimestamp(),
       });
 
@@ -90,8 +72,7 @@ const UploadDownloadFiles: React.FC = () => {
           setProgress(100);
           setRemainingTime(null);
           setUploadStatus('Upload Complete!');
-          setFormData({ title: '', version: '', file: null });
-          setFileInputKey(Date.now()); // Reset file input
+          setFormData({ title: '', link: '', brand: 'samsung' });
           setIsUploading(false);
         }
       }, 200);
@@ -108,12 +89,12 @@ const UploadDownloadFiles: React.FC = () => {
 
   return (
     <div className="bg-gradient-to-br relative from-black/70 to-red-900/20 min-h-screen w-screen">
-      <section className="py-12 px-4  sm:px-6 lg:px-8">
+      <section className="py-12 px-4 mt-16 sm:px-6 lg:px-8">
         <div className="max-w-md mx-auto">
-          <h2 className="text-2xl mt-16  font-bold text-red-500 mb-6 text-center">Upload Downloadable APK</h2>
+          <h2 className="text-2xl mt-16  font-bold text-red-500 mb-6 text-center">Upload System App</h2>
           <form className="upload-card bg-black/40 backdrop-blur-md p-6 rounded-xl shadow-lg" onSubmit={handleUpload}>
             <div className="flex items-center justify-center mb-6">
-              <Package className="text-red-400 h-12 w-12" />
+              <Upload className="text-red-400 h-12 w-12" />
             </div>
 
             <input
@@ -121,47 +102,49 @@ const UploadDownloadFiles: React.FC = () => {
               name="title"
               value={formData.title}
               onChange={handleChange}
-              placeholder="Title"
-              className="w-full mb-4 p-2 bg-black/20 border border-red-800/30 rounded-lg text-white"
+              placeholder="Title (e.g., My App)"
+              className="w-full mb-4 p-2 bg-black/20 border border-red-800/30 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-red-600"
             />
             <input
               type="text"
-              name="version"
-              value={formData.version}
+              name="link"
+              value={formData.link}
               onChange={handleChange}
-              placeholder="Version (e.g., 1.0.0)"
-              className="w-full mb-4 p-2 bg-black/20 border border-red-800/30 rounded-lg text-white"
+              placeholder="Command Link (e.g., com.example.app)"
+              className="w-full mb-4 p-2 bg-black/20 border border-red-800/30 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-red-600"
             />
-            <input
-              key={fileInputKey} // Key to reset file input
-              type="file"
-              name="file"
-              accept=".apk"
+            <select
+              name="brand"
+              value={formData.brand}
               onChange={handleChange}
-              className="w-full mb-4 p-2 bg-black/20 border border-red-800/30 rounded-lg text-white"
-            />
+              className="w-full mb-4 p-2 bg-black/20 border border-red-800/30 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-red-600"
+            >
+              {BRANDS.map((brand) => (
+                <option key={brand} value={brand} className="bg-black/90">
+                  {BRAND_CONFIG[brand].label}
+                </option>
+              ))}
+            </select>
 
             <button
               type="submit"
-              disabled={!formData.title || !formData.version || !formData.file || isUploading}
+              disabled={!formData.title || !formData.link || !formData.brand || isUploading}
               className={`w-full py-2 rounded-lg text-white ${
-                isUploading
-                  ? 'bg-gray-500 cursor-not-allowed'
-                  : 'bg-red-600 hover:bg-red-700'
-              }`}
+                isUploading ? 'bg-gray-500 cursor-not-allowed' : 'bg-red-600 hover:bg-red-700'
+              } transition-colors duration-300`}
             >
               {isUploading ? (
                 <span className="animate-pulse">Uploading...</span>
               ) : (
                 <>
-                  <Upload className="inline h-5 w-5 mr-2" /> Upload APK
+                  <Upload className="inline h-5 w-5 mr-2" /> Upload App
                 </>
               )}
             </button>
 
             {uploadStatus && (
-              <p className="upload-status mt-4 text-center text-green-400">
-                {uploadStatus} <CheckCircle className="inline h-5 w-5" />
+              <p className="mt-4 text-center text-green-400">
+                {uploadStatus} {uploadStatus === 'Upload Complete!' && <CheckCircle className="inline h-5 w-5" />}
               </p>
             )}
 
@@ -185,4 +168,4 @@ const UploadDownloadFiles: React.FC = () => {
   );
 };
 
-export default UploadDownloadFiles;
+export default SystemUpload;

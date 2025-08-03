@@ -180,7 +180,7 @@ export default function DownloadManager() {
               className="flex items-center flex-1"
             >
               <div>
-                <h3 className="text-white font-medium">Open {item.title}</h3>
+                <h3 className="text-white font-medium">{item.title}</h3>
                 <p className="text-gray-400 text-sm">{item.link}</p>
               </div>
             </div>

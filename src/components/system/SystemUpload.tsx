@@ -89,7 +89,7 @@ const SystemUpload: React.FC = () => {
 
   return (
     <div className="bg-gradient-to-br relative from-black/70 to-red-900/20 min-h-screen w-screen">
-      <section className="py-12 px-4 mt-16 sm:px-6 lg:px-8">
+      <section className="py-12 px-4 sm:px-6 lg:px-8">
         <div className="max-w-md mx-auto">
           <h2 className="text-2xl mt-16  font-bold text-red-500 mb-6 text-center">Upload System App</h2>
           <form className="upload-card bg-black/40 backdrop-blur-md p-6 rounded-xl shadow-lg" onSubmit={handleUpload}>

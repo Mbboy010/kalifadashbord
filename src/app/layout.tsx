@@ -1,3 +1,4 @@
+import Footer from '../components/navigate/Footer';
 import Navigation from '../components/navigate/Navigation';
 
 import type { Metadata } from "next";
@@ -36,7 +37,9 @@ export default function RootLayout({
        <Navigation />
 
         {children}
-
+      
+      <Footer />
+      
       </body>
     </html>
   );

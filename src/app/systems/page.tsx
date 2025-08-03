@@ -1,4 +1,4 @@
-import UploadDownloadFiles from '../../components/files/UploadDownloadFiles';
+import DownloadManager from '../../components/system/DownloadManager';
 
 import type { Metadata } from 'next';
 
@@ -12,7 +12,7 @@ export const metadata: Metadata = {
 export default function InstrumentalPage() {
   return (
     <div className="container mx-auto min-h-full">
-        <UploadDownloadFiles />
+        <DownloadManager />
     </div>
   );
 }

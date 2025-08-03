@@ -51,7 +51,7 @@ const UploadDownloadFiles: React.FC = () => {
 
     try {
       // Ensure environment variable is defined
-      const bucketId = process.env.NEXT_PUBLIC_STORAGE_BUCKET;
+      const bucketId = "688cce34002223f15e42";
       if (!bucketId) {
         throw new Error('Storage bucket ID is not defined');
       }

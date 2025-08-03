@@ -107,7 +107,7 @@ const UploadDownloadFiles: React.FC = () => {
   }, []);
 
   return (
-    <div className="bg-gradient-to-br from-black/70 to-red-900/20 min-h-screen w-screen">
+    <div className="bg-gradient-to-br relative from-black/70 to-red-900/20 min-h-screen w-screen">
       <section className="py-12 px-4 mt-16 sm:px-6 lg:px-8">
         <div className="max-w-md mx-auto">
           <h2 className="text-2xl font-bold text-red-500 mb-6 text-center">Upload Downloadable APK</h2>

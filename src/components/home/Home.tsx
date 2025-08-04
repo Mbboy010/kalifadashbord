@@ -1,5 +1,6 @@
 'use client';
 
+import ContractMessagesComponent from './ContractMessagesComponent';
 import UserSummaryComponent from './UserSummaryComponent';
 import ButtonList from './DownloadList';
 import BarChart from './BarChart';
@@ -37,7 +38,8 @@ const Home: React.FC = () => {
  
         <UserSummaryComponent />
 
-        
+      <ContractMessagesComponent />
+
     </div>
   );
 };

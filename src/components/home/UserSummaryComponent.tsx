@@ -1,11 +1,18 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { ChevronRight } from 'lucide-react';
-import { gsap } from 'gsap';
+import { ChevronRight, MoreVertical, Trash2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { collection, getDocs, query, limit } from 'firebase/firestore';
-import { db } from '@/server/firebaseApi'; // ✅ db import
+import {
+  collection,
+  getDocs,
+  query,
+  limit,
+  orderBy,
+  deleteDoc,
+  doc,
+} from 'firebase/firestore';
+import { db } from '@/server/firebaseApi';
 
 interface UserSummary {
   id: string;
@@ -30,7 +37,11 @@ const UserSummaryComponent: React.FC = () => {
   useEffect(() => {
     const fetchUsers = async () => {
       try {
-        const q = query(collection(db, 'trialRequests'), limit(7));
+        const q = query(
+          collection(db, 'trialRequests'),
+          orderBy('timestamp', 'desc'), // ✅ sort by time
+          limit(7)
+        );
         const querySnapshot = await getDocs(q);
         const usersData: UserSummary[] = querySnapshot.docs.map((doc) => ({
           id: doc.id,
@@ -49,42 +60,54 @@ const UserSummaryComponent: React.FC = () => {
     fetchUsers();
   }, []);
 
-  useEffect(() => {
-    if (!loading) {
-      gsap.from('.user-item', {
-        opacity: 0,
-        y: 50,
-        duration: 0.6,
-        stagger: 0.2,
-        ease: 'power2.out',
-      });
+  const handleDelete = async (id: string) => {
+    try {
+      await deleteDoc(doc(db, 'trialRequests', id));
+      setUsers((prev) => prev.filter((user) => user.id !== id));
+    } catch (err) {
+      console.error('Error deleting user:', err);
     }
-  });
+  };
 
   const handleSeeMore = () => {
     router.push('/users');
   };
 
   return (
-    <section className="py-12 px-4 sm:px-6 lg:px-8">
+    <section className="py-12 px-4 border-t border-dashed border-red-500 sm:px-6 lg:px-8">
       <div className="max-w-3xl mx-auto">
         <h2 className="text-2xl font-bold text-red-500 mb-6 text-center">User Summaries</h2>
+
         <div className="space-y-4">
           {loading
             ? Array.from({ length: 7 }).map((_, index) => <SkeletonItem key={index} />)
             : users.map((user) => (
                 <div
                   key={user.id}
-                  className="user-item flex items-center justify-between p-4 bg-black/40 backdrop-blur-md rounded-lg shadow-lg hover:bg-red-900/30 transition-all duration-300"
+                  className="relative flex items-start justify-between p-4 bg-black/40 backdrop-blur-md rounded-lg shadow-lg hover:bg-red-900/30 transition-all duration-300"
                 >
                   <div>
                     <p className="text-white font-medium">IMEI: {user.imei}</p>
                     <p className="text-gray-400 text-sm">Email: {user.email}</p>
                     <p className="text-gray-400 text-sm">Device: {user.deviceType}</p>
                   </div>
+
+                  {/* Delete Dropdown */}
+                  <div className="relative group">
+                    <MoreVertical className="text-gray-400 cursor-pointer" />
+                    <div className="absolute right-0 mt-2 hidden group-hover:flex flex-col bg-white rounded shadow-lg z-10">
+                      <button
+                        onClick={() => handleDelete(user.id)}
+                        className="flex items-center px-3 py-2 text-sm text-red-600 hover:bg-red-100"
+                      >
+                        <Trash2 className="w-4 h-4 mr-1" /> Delete
+                      </button>
+                    </div>
+                  </div>
                 </div>
               ))}
         </div>
+
         {!loading && (
           <div className="mt-6 text-center">
             <button

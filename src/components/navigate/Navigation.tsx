@@ -116,9 +116,10 @@ const Navigation: React.FC = () => {
             {/* Dropdown Menu */}
             <div
               ref={menuRef}
-              className="absolute top-16 bg-gray-800/30 border border-gray-400  right-4 w-48 hidden opacity-0 backdrop-blur-2xl  rounded-lg shadow-xl"
+              className="absolute top-16  border border-gray-400  right-4 w-48 hidden rounded-lg shadow-xl"
               
             >
+              <div className="w-full h-full bg-[#00000033]  backdrop-blur">
               <div className="py-1">
                 <Link
                   href="/settings"
@@ -146,7 +147,9 @@ const Navigation: React.FC = () => {
                   )}
                 </Link>
               </div>
+              </div>
             </div>
+            
           </div>
         </div>
       </div>

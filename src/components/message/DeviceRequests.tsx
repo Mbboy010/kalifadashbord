@@ -1,24 +1,16 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { ChevronRight, MoreVertical, Trash2 } from 'lucide-react';
-import { useRouter } from 'next/navigation';
-import {
-  collection,
-  getDocs,
-  query,
-  limit,
-  orderBy,
-  deleteDoc,
-  doc,
-} from 'firebase/firestore';
+import { MoreVertical, Trash2 } from 'lucide-react';
+import { collection, getDocs, query, orderBy, deleteDoc, doc } from 'firebase/firestore';
 import { db } from '@/server/firebaseApi';
 
-interface UserSummary {
+interface DeviceRequest {
   id: string;
   imei: string;
   email: string;
   deviceType: string;
+  requestDate: string;
 }
 
 const SkeletonItem = () => (
@@ -29,75 +21,70 @@ const SkeletonItem = () => (
   </div>
 );
 
-const UserSummaryComponent: React.FC = () => {
-  const router = useRouter();
-  const [users, setUsers] = useState<UserSummary[]>([]);
+const DeviceRequests: React.FC = () => {
+  const [requests, setRequests] = useState<DeviceRequest[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const fetchUsers = async () => {
+    const fetchRequests = async () => {
       try {
         const q = query(
           collection(db, 'trialRequests'),
-          orderBy('timestamp', 'desc'), // ✅ sort by time
-          limit(7)
+          orderBy('timestamp', 'desc')
         );
         const querySnapshot = await getDocs(q);
-        const usersData: UserSummary[] = querySnapshot.docs.map((doc) => ({
+        const requestsData: DeviceRequest[] = querySnapshot.docs.map((doc) => ({
           id: doc.id,
           imei: doc.data().imei || 'N/A',
           email: doc.data().email || 'N/A',
           deviceType: doc.data().deviceType || 'Unknown',
+          requestDate: doc.data().timestamp?.toDate().toLocaleDateString() || 'N/A',
         }));
-        setUsers(usersData);
+        setRequests(requestsData);
       } catch (error) {
-        console.error('Error fetching trialRequests:', error);
+        console.error('Error fetching device requests:', error);
       } finally {
         setLoading(false);
       }
     };
 
-    fetchUsers();
+    fetchRequests();
   }, []);
 
   const handleDelete = async (id: string) => {
     try {
       await deleteDoc(doc(db, 'trialRequests', id));
-      setUsers((prev) => prev.filter((user) => user.id !== id));
+      setRequests((prev) => prev.filter((request) => request.id !== id));
     } catch (err) {
-      console.error('Error deleting user:', err);
+      console.error('Error deleting request:', err);
     }
-  };
-
-  const handleSeeMore = () => {
-    router.push('/users');
   };
 
   return (
     <section className="py-12 px-4 border-t border-dashed border-red-500 sm:px-6 lg:px-8">
       <div className="max-w-3xl mx-auto">
-        <h2 className="text-2xl font-bold text-red-500 mb-6 text-center">User Summaries</h2>
+        <h2 className="text-2xl mt-16 font-bold text-red-500 mb-6 text-center">Device Registration Requests</h2>
 
         <div className="space-y-4">
           {loading
             ? Array.from({ length: 7 }).map((_, index) => <SkeletonItem key={index} />)
-            : users.map((user) => (
+            : requests.map((request) => (
                 <div
-                  key={user.id}
+                  key={request.id}
                   className="relative flex items-start justify-between p-4 bg-black/40 backdrop-blur-md rounded-lg shadow-lg hover:bg-red-900/30 transition-all duration-300"
                 >
                   <div>
-                    <p className="text-white font-medium">IMEI: {user.imei}</p>
-                    <p className="text-gray-400 text-sm">Email: {user.email}</p>
-                    <p className="text-gray-400 text-sm">Device: {user.deviceType}</p>
+                    <p className="text-white font-medium">IMEI: {request.imei}</p>
+                    <p className="text-gray-400 text-sm">Email: {request.email}</p>
+                    <p className="text-gray-400 text-sm">Device: {request.deviceType}</p>
+                    <p className="text-gray-400 text-sm">Request Date: {request.requestDate}</p>
                   </div>
 
-                  {/* Delete Dropdown */}
                   <div className="relative group">
                     <MoreVertical className="text-gray-400 cursor-pointer" />
                     <div className="absolute right-0 mt-2 hidden group-hover:flex flex-col bg-black/90 backdrop-blur-md rounded shadow-lg z-10">
                       <button
-                        onClick={() => handleDelete(user.id)}
+                        onClick={() => handleDelete(request.id)}
                         className="flex items-center px-3 py-2 text-sm text-red-600 hover:bg-red-100"
                       >
                         <Trash2 className="w-4 h-4 mr-1" /> Delete
@@ -107,20 +94,9 @@ const UserSummaryComponent: React.FC = () => {
                 </div>
               ))}
         </div>
-
-        {!loading && (
-          <div className="mt-6 text-center">
-            <button
-              onClick={handleSeeMore}
-              className="px-6 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors duration-300 flex items-center justify-center mx-auto"
-            >
-              <ChevronRight className="h-5 w-5 mr-2" /> See More
-            </button>
-          </div>
-        )}
       </div>
     </section>
   );
 };
 
-export default UserSummaryComponent;
+export default DeviceRequests;

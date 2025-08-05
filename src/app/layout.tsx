@@ -1,3 +1,4 @@
+import LoginComponent from '../components/auth/LoginComponent';
 import Footer from '../components/navigate/Footer';
 import Navigation from '../components/navigate/Navigation';
 
@@ -33,7 +34,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={`${geistSans.variable} ${geistMono.variable} bg-black text-gray-200  `}>
-      
+       <LoginComponent />
        <Navigation />
 
         {children}

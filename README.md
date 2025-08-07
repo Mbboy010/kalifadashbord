@@ -1,37 +1,43 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Kalifa Dashboard
 
-## Getting Started
+Welcome to the **Kalifa Dashboard**, a modern and responsive web application built with Next.js, Tailwind CSS, and TypeScript. This dashboard provides a sleek, dark-themed interface with red accents, designed for managing various features such as user summaries, contact messages, file uploads/downloads, system monitoring, and more. It leverages GSAP for animations and Lucide React for icons, ensuring a dynamic and visually appealing user experience.
 
-First, run the development server:
+- **Last Updated**: August 07, 2025, 10:08 AM WAT
+- **Version**: 1.0.0
+- **License**: MIT (see LICENSE for details)
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+## Table of Contents
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+- [Features](#features)
+- [Prerequisites](#prerequisites)
+- [Installation](#installation)
+- [Usage](#usage)
+- [Components](#components)
+- [Development](#development)
+- [Contributing](#contributing)
+- [License](#license)
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Features
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+- **Responsive Design**: Optimized for desktop and mobile devices.
+- **Dark Theme with Red Accents**: Stylish and consistent UI with gradient backgrounds.
+- **Animated Transitions**: Smooth animations powered by GSAP.
+- **User Authentication**: Login page with initial loading and submission states.
+- **User Management**: Summary of users with IMEI, Email, and DeviceType.
+- **Contact Management**: Display of contact messages with Name, Email, Phone, Subject, and Message.
+- **File Handling**: Upload and download functionalities for APK files and system data.
+- **System Monitoring**: List of active systems with status updates.
+- **Navigation and Footer**: Interactive navigation bar and a simple footer.
 
-## Learn More
+## Prerequisites
 
-To learn more about Next.js, take a look at the following resources:
+- Node.js (v14.x or later)
+- npm or yarn
+- Git (for cloning the repository)
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Installation
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
-# kalifadashbord
+1. Clone the repository:
+   ```bash
+   git clone https://github.com/your-username/kalifa-dashboard.git
+   cd kalifa-dashboard

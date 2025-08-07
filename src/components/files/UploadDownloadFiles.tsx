@@ -55,19 +55,17 @@ const UploadDownloadFiles: React.FC = () => {
         throw new Error('Storage bucket ID is not defined');
       }
 
-      // ✅ Set correct MIME type for APK file
+      // Set correct MIME type for APK file
       const renamedFile = new File([file], `${title}.apk`, {
         type: 'application/vnd.android.package-archive',
         lastModified: file.lastModified,
       });
 
+      // Removed contentType from options
       const uploadResponse = await storage.createFile(
         bucketId,
         ID.unique(),
-        renamedFile,
-        {
-          contentType: 'application/vnd.android.package-archive',
-        }
+        renamedFile
       );
 
       const downloadUrl = storage.getFileDownload(bucketId, uploadResponse.$id);
@@ -110,9 +108,9 @@ const UploadDownloadFiles: React.FC = () => {
 
   return (
     <div className="bg-gradient-to-br relative from-black/70 to-red-900/20 min-h-screen w-screen">
-      <section className="py-12 px-4  sm:px-6 lg:px-8">
+      <section className="py-12 px-4 sm:px-6 lg:px-8">
         <div className="max-w-md mx-auto">
-          <h2 className="text-2xl mt-16  font-bold text-red-500 mb-6 text-center">Upload Downloadable APK</h2>
+          <h2 className="text-2xl mt-16 font-bold text-red-500 mb-6 text-center">Upload Downloadable APK</h2>
           <form className="upload-card bg-black/40 backdrop-blur-md p-6 rounded-xl shadow-lg" onSubmit={handleUpload}>
             <div className="flex items-center justify-center mb-6">
               <Package className="text-red-400 h-12 w-12" />

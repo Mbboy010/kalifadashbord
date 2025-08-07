@@ -35,7 +35,7 @@ const UploadDownloadFiles: React.FC = () => {
   };
 
   const handleUpload = async (e: FormEvent) => {
-    e.preventDefault(); // Prevent form submission default behavior
+    e.preventDefault();
 
     const { title, version, file } = formData;
 
@@ -50,22 +50,24 @@ const UploadDownloadFiles: React.FC = () => {
     setRemainingTime(null);
 
     try {
-      // Ensure environment variable is defined
       const bucketId = "688cce34002223f15e42";
       if (!bucketId) {
         throw new Error('Storage bucket ID is not defined');
       }
 
-      // Rename file with the title and preserve .apk extension
+      // ✅ Set correct MIME type for APK file
       const renamedFile = new File([file], `${title}.apk`, {
-        type: file.type,
+        type: 'application/vnd.android.package-archive',
         lastModified: file.lastModified,
       });
 
       const uploadResponse = await storage.createFile(
         bucketId,
         ID.unique(),
-        renamedFile
+        renamedFile,
+        {
+          contentType: 'application/vnd.android.package-archive',
+        }
       );
 
       const downloadUrl = storage.getFileDownload(bucketId, uploadResponse.$id);
@@ -91,7 +93,7 @@ const UploadDownloadFiles: React.FC = () => {
           setRemainingTime(null);
           setUploadStatus('Upload Complete!');
           setFormData({ title: '', version: '', file: null });
-          setFileInputKey(Date.now()); // Reset file input
+          setFileInputKey(Date.now());
           setIsUploading(false);
         }
       }, 200);
@@ -133,7 +135,7 @@ const UploadDownloadFiles: React.FC = () => {
               className="w-full mb-4 p-2 bg-black/20 border border-red-800/30 rounded-lg text-white"
             />
             <input
-              key={fileInputKey} // Key to reset file input
+              key={fileInputKey}
               type="file"
               name="file"
               accept=".apk"

@@ -33,6 +33,16 @@ const ButtonList: React.FC = () => {
       onClick: () => router.push('/upload-download'),
     },
     {
+      label: 'Windows Files List',
+      icon: Download,
+      onClick: () => router.push('/windows-files'),
+    },
+    {
+      label: 'Upload Windows tool',
+      icon: Upload,
+      onClick: () => router.push('/window-upload'),
+    },
+    {
       label: 'System List',
       icon: Server,
       onClick: () => router.push('/systems'),

@@ -31,7 +31,7 @@ interface ToolForm {
   size: string;
 }
 
-// ✅ Crop + resize image before upload (main tool image only)
+// ✅ Crop + resize image before upload (main tool image only, force PNG)
 const cropAndResizeImage = (
   file: File,
   maxSize = 500
@@ -60,12 +60,16 @@ const cropAndResizeImage = (
       canvas.toBlob(
         (blob) => {
           if (blob) {
-            const resizedFile = new File([blob], file.name, { type: file.type });
-            resolve(resizedFile);
+            const pngFile = new File(
+              [blob],
+              file.name.replace(/\.[^/.]+$/, '') + '.png',
+              { type: 'image/png' }
+            );
+            resolve(pngFile);
           }
         },
-        file.type,
-        0.8 // compression quality
+        'image/png',
+        1.0
       );
     };
 
@@ -73,7 +77,7 @@ const cropAndResizeImage = (
   });
 };
 
-// ✅ Resize proportionally (for screenshots only)
+// ✅ Resize proportionally (for screenshots only, force PNG)
 const resizeImage = (
   file: File,
   maxSize = 800 // max width/height
@@ -114,12 +118,16 @@ const resizeImage = (
       canvas.toBlob(
         (blob) => {
           if (blob) {
-            const resizedFile = new File([blob], file.name, { type: file.type });
-            resolve(resizedFile);
+            const pngFile = new File(
+              [blob],
+              file.name.replace(/\.[^/.]+$/, '') + '.png',
+              { type: 'image/png' }
+            );
+            resolve(pngFile);
           }
         },
-        file.type,
-        0.8
+        'image/png',
+        1.0
       );
     };
 
@@ -171,12 +179,12 @@ const UploadToolPage: React.FC = () => {
       setFormData((prev) => ({ ...prev, [field]: file, size: sizeMB }));
     } 
     else if (field === 'image' && file) {
-      // ✅ crop & resize main tool image
+      // ✅ crop & resize main tool image to PNG
       const cropped = await cropAndResizeImage(file, 500);
       setFormData((prev) => ({ ...prev, image: cropped }));
     } 
     else if (field === 'screenshots') {
-      // ✅ resize screenshots (no crop)
+      // ✅ resize screenshots to PNG
       const files = e.target.files ? Array.from(e.target.files) : [];
       const resizedFiles = await Promise.all(files.map((f) => resizeImage(f, 800)));
       setFormData((prev) => ({ ...prev, screenshots: [...prev.screenshots, ...resizedFiles] }));
@@ -214,7 +222,7 @@ const UploadToolPage: React.FC = () => {
     return toUrlString(url);
   };
 
-  // Submit handler (unchanged)
+  // Submit handler (unchanged except images are now PNGs)
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.title || !formData.description || !formData.image || !formData.downloadFile) {

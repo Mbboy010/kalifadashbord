@@ -687,22 +687,7 @@ const EditWindowPage: React.FC = () => {
             </div>
           </div>
 
-          {/* Release Date */}
-          <div className="fade-item">
-            <label className="block text-sm text-gray-300 mb-1">Release Date</label>
-            <div className="relative">
-              <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-              <input
-                type="text"
-                name="date"
-                value={formData.date}
-                onChange={handleChange}
-                placeholder="Oct 08, 2025"
-                className="w-full pl-10 pr-4 py-3 bg-black/30 border border-red-800/40 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-red-600 transition-all duration-200"
-                disabled={isSubmitting}
-              />
-            </div>
-          </div>
+
 
           {/* Submit */}
           <div className="fade-item">

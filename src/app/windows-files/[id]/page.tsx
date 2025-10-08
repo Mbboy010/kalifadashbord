@@ -382,7 +382,7 @@ const EditWindowPage: React.FC = () => {
       setUploadMessage('Done!');
       // small pause to show completion to user (no waiting for you — just immediate next steps)
       setTimeout(() => {
-        router.push('/window');
+        router.push(`https://kalifaos.vercel.app/windows-tools/${formData.id}`);
       }, 600);
     } catch (err) {
       console.error('Update failed', err);

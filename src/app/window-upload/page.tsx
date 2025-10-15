@@ -1,17 +1,11 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { Minus, Tag, Monitor, Cpu, Shield, Star, Loader2 } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { Minus, Tag, Monitor, Cpu, Shield, Star, Loader2, Calendar, Link, Type, Bold } from 'lucide-react';
 import { gsap } from 'gsap';
-
-// ✅ Firebase
 import { db } from '@/server/firebaseApi';
 import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
-
-// ✅ Appwrite (imported config from server)
 import { storage } from '@/server/appwrite';
-
-// ✅ For unique IDs
 import { v4 as uuidv4 } from 'uuid';
 
 interface ToolForm {
@@ -31,11 +25,8 @@ interface ToolForm {
   size: string;
 }
 
-// ✅ Crop + resize image before upload (main tool image only, force PNG)
-const cropAndResizeImage = (
-  file: File,
-  maxSize = 500
-): Promise<File> => {
+// Crop and resize image before upload (main tool image only, force PNG)
+const cropAndResizeImage = (file: File, maxSize = 500): Promise<File> => {
   return new Promise((resolve) => {
     const img = new Image();
     const reader = new FileReader();
@@ -77,11 +68,8 @@ const cropAndResizeImage = (
   });
 };
 
-// ✅ Resize proportionally (for screenshots only, force PNG)
-const resizeImage = (
-  file: File,
-  maxSize = 800 // max width/height
-): Promise<File> => {
+// Resize proportionally (for screenshots only, force PNG)
+const resizeImage = (file: File, maxSize = 800): Promise<File> => {
   return new Promise((resolve) => {
     const img = new Image();
     const reader = new FileReader();
@@ -135,7 +123,92 @@ const resizeImage = (
   });
 };
 
+// Convert tags to HTML
+const convertToHtml = (text: string): string => {
+  let result = text;
+  const tagPairs = [
+    { open: /\[center\](.*?)\[\/center\]/gs, replace: '<div class="text-center">$1</div>' },
+    { open: /\[underline\](.*?)\[\/underline\]/gs, replace: '<span class="underline">$1</span>' },
+    { open: /\[bold\](.*?)\[\/bold\]/gs, replace: '<span class="font-bold">$1</span>' },
+    { open: /\[size=sm\](.*?)\[\/size\]/gs, replace: '<span class="text-sm">$1</span>' },
+    { open: /\[size=md\](.*?)\[\/size\]/gs, replace: '<span class="text-base">$1</span>' },
+    { open: /\[size=lg\](.*?)\[\/size\]/gs, replace: '<span class="text-lg">$1</span>' },
+    { open: /\[color=red\](.*?)\[\/color\]/gs, replace: '<span class="text-red-500">$1</span>' },
+    { open: /\[color=green\](.*?)\[\/color\]/gs, replace: '<span class="text-green-500">$1</span>' },
+    { open: /\[color=blue\](.*?)\[\/color\]/gs, replace: '<span class="text-blue-500">$1</span>' },
+    { open: /\[link href="([^"]+)"\](.*?)\[\/link\]/gs, replace: '<a href="$1" class="text-blue-400 hover:underline" target="_blank" rel="noopener noreferrer">$2</a>' },
+  ];
+  const selfClosingTags = [/\[bar\/\]/g];
+
+  // Process paired tags
+  for (const { open, replace } of tagPairs) {
+    result = result.replace(open, replace);
+  }
+
+  // Process self-closing tags
+  for (const tag of selfClosingTags) {
+    result = result.replace(tag, '<hr class="border-t border-gray-600 my-2"/>');
+  }
+
+  // Replace newlines
+  result = result.replace(/\n\n/g, '<br/><br/>');
+
+  // Remove any unprocessed tags
+  result = result.replace(/\[\/?[a-zA-Z0-9= "]*\]/g, '');
+
+  return result;
+};
+
+// Validate description tags
+const validateDescription = (text: string) => {
+  const tagPairs = [
+    { open: /\[center\]/g, close: /\[\/center\]/g },
+    { open: /\[underline\]/g, close: /\[\/underline\]/g },
+    { open: /\[bold\]/g, close: /\[\/bold\]/g },
+    { open: /\[size=sm\]/g, close: /\[\/size\]/g },
+    { open: /\[size=md\]/g, close: /\[\/size\]/g },
+    { open: /\[size=lg\]/g, close: /\[\/size\]/g },
+    { open: /\[color=red\]/g, close: /\[\/color\]/g },
+    { open: /\[color=green\]/g, close: /\[\/color\]/g },
+    { open: /\[color=blue\]/g, close: /\[\/color\]/g },
+    { open: /\[link href="[^"]+"\]/g, close: /\[\/link\]/g },
+  ];
+  const selfClosingTags = [/\[bar\/\]/g];
+
+  // Track open tags
+  const tagStack: string[] = [];
+  const tags = text.match(/\[\/?[a-zA-Z0-9= "]*\]/g) || [];
+
+  for (const tag of tags) {
+    if (tag.startsWith('[') && !tag.endsWith('/]')) {
+      // Opening tag
+      const tagName = tag.match(/\[([a-zA-Z0-9= "]+)\]/)?.[1];
+      if (tagName) tagStack.push(tagName);
+    } else if (tag.startsWith('[/')) {
+      // Closing tag
+      const closeTagName = tag.match(/\[\/([a-zA-Z0-9= "]+)\]/)?.[1];
+      if (closeTagName) {
+        const lastOpenTag = tagStack.pop();
+        if (lastOpenTag !== closeTagName) return false; // Mismatched tags
+      }
+    }
+  }
+
+  // Check if all tags are closed
+  if (tagStack.length > 0) return false;
+
+  // Check self-closing tags (should not have a corresponding close tag)
+  for (const selfClose of selfClosingTags) {
+    if (text.match(selfClose)?.length !== (text.match(new RegExp(`\\${selfClose.source.slice(0, -2)}\\]`)) || []).length) {
+      return false;
+    }
+  }
+
+  return true;
+};
+
 const UploadToolPage: React.FC = () => {
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [formData, setFormData] = useState<ToolForm>({
     title: '',
     description: '',
@@ -146,7 +219,7 @@ const UploadToolPage: React.FC = () => {
     price: null,
     os: '',
     architecture: '',
-    date: new Date().toLocaleDateString(),
+    date: new Date().toLocaleDateString('en-US', { timeZone: 'Africa/Lagos' }),
     rating: '',
     security: '',
     screenshots: [],
@@ -154,6 +227,7 @@ const UploadToolPage: React.FC = () => {
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [progress, setProgress] = useState(0);
+  const [linkUrl, setLinkUrl] = useState('');
 
   // Handle text/select inputs
   const handleChange = (
@@ -161,6 +235,68 @@ const UploadToolPage: React.FC = () => {
   ) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
+  };
+
+  // Handle link URL input
+  const handleLinkUrlChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setLinkUrl(e.target.value);
+  };
+
+  // Handle text formatting for description
+  const applyTextFormat = (
+    format: 'center' | 'underline' | 'bold' | 'size=sm' | 'size=md' | 'size=lg' | 'color=red' | 'color=green' | 'color=blue' | 'paragraph' | 'link' | 'bar'
+  ) => {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const selectedText = formData.description.substring(start, end);
+    let newText = formData.description;
+
+    if (format === 'paragraph') {
+      newText = `${newText.substring(0, start)}\n\n${newText.substring(end)}`;
+    } else if (format === 'link') {
+      if (!linkUrl) {
+        alert('Please enter a valid URL for the link.');
+        return;
+      }
+      if (!/^https?:\/\/[^\s/$.?#].[^\s]*$/.test(linkUrl)) {
+        alert('Please enter a valid URL starting with http:// or https://');
+        return;
+      }
+      if (selectedText) {
+        newText = `${newText.substring(0, start)}[link href="${linkUrl}"]${selectedText}[/link]${newText.substring(end)}`;
+      } else {
+        newText = `${newText.substring(0, start)}[link href="${linkUrl}"]Click here[/link]${newText.substring(end)}`;
+        textarea.selectionStart = start + 13 + linkUrl.length;
+        textarea.selectionEnd = start + 13 + linkUrl.length + 10;
+      }
+      setLinkUrl('');
+    } else if (format === 'bar') {
+      newText = `${newText.substring(0, start)}[bar/]${newText.substring(end)}`;
+      textarea.selectionStart = start + 6;
+      textarea.selectionEnd = start + 6;
+    } else if (format.startsWith('color=') || format.startsWith('size=')) {
+      if (selectedText) {
+        newText = `${newText.substring(0, start)}[${format}]${selectedText}[/${format.split('=')[0]}]${newText.substring(end)}`;
+      } else {
+        newText = `${newText.substring(0, start)}[${format}][/${format.split('=')[0]}]${newText.substring(end)}`;
+        textarea.selectionStart = start + format.length + 2;
+        textarea.selectionEnd = start + format.length + 2;
+      }
+    } else {
+      if (selectedText) {
+        newText = `${newText.substring(0, start)}[${format}]${selectedText}[/${format}]${newText.substring(end)}`;
+      } else {
+        newText = `${newText.substring(0, start)}[${format}][/${format}]${newText.substring(end)}`;
+        textarea.selectionStart = start + format.length + 2;
+        textarea.selectionEnd = start + format.length + 2;
+      }
+    }
+
+    setFormData((prev) => ({ ...prev, description: newText }));
+    textarea.focus();
   };
 
   // Handle file uploads
@@ -177,14 +313,10 @@ const UploadToolPage: React.FC = () => {
       }
       const sizeMB = (file.size / (1024 * 1024)).toFixed(2) + ' MB';
       setFormData((prev) => ({ ...prev, [field]: file, size: sizeMB }));
-    } 
-    else if (field === 'image' && file) {
-      // ✅ crop & resize main tool image to PNG
+    } else if (field === 'image' && file) {
       const cropped = await cropAndResizeImage(file, 500);
       setFormData((prev) => ({ ...prev, image: cropped }));
-    } 
-    else if (field === 'screenshots') {
-      // ✅ resize screenshots to PNG
+    } else if (field === 'screenshots') {
       const files = e.target.files ? Array.from(e.target.files) : [];
       const resizedFiles = await Promise.all(files.map((f) => resizeImage(f, 800)));
       setFormData((prev) => ({ ...prev, screenshots: [...prev.screenshots, ...resizedFiles] }));
@@ -222,11 +354,15 @@ const UploadToolPage: React.FC = () => {
     return toUrlString(url);
   };
 
-  // Submit handler (unchanged except images are now PNGs)
+  // Submit handler
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.title || !formData.description || !formData.image || !formData.downloadFile) {
       alert('Please fill all required fields');
+      return;
+    }
+    if (!validateDescription(formData.description)) {
+      alert('Unbalanced formatting tags in description. Please check [center], [underline], [bold], [size], [color], [link], and [bar/] tags.');
       return;
     }
 
@@ -256,18 +392,20 @@ const UploadToolPage: React.FC = () => {
       }
       setProgress(90);
 
+      const htmlDescription = convertToHtml(formData.description);
+
       await setDoc(doc(db, 'Windows-tools', docId), {
         id: docId,
         downloads: 0,
         title: formData.title,
-        description: formData.description,
+        description: htmlDescription,
         image: imageUrl ?? null,
         downloadUrl: downloadUrl ?? null,
         priceType: formData.priceType,
         price: formData.priceType === 'Paid' ? formData.price ?? 0 : 0,
         os: formData.os || '',
         architecture: formData.architecture || '',
-        date: new Date().toISOString(),
+        date: formData.date || new Date().toISOString(),
         rating: formData.rating || '',
         security: formData.security || '',
         screenshots: screenshotUrls,
@@ -287,12 +425,13 @@ const UploadToolPage: React.FC = () => {
         price: null,
         os: '',
         architecture: '',
-        date: new Date().toLocaleDateString(),
+        date: new Date().toLocaleDateString('en-US', { timeZone: 'Africa/Lagos' }),
         rating: '',
         security: '',
         screenshots: [],
         size: '',
       });
+      setLinkUrl('');
     } catch (err) {
       console.error(err);
       alert('Upload failed!');
@@ -313,7 +452,7 @@ const UploadToolPage: React.FC = () => {
   }, []);
 
   return (
-     <section className="min-h-screen flex items-center justify-center bg-gradient-to-br from-red-900/20 to-black/50">
+    <section className="min-h-screen flex items-center justify-center bg-gradient-to-br from-red-900/20 to-black/50">
       <div className="upload-container mt-16 w-full max-w-3xl p-8 bg-black/40 backdrop-blur-md rounded-2xl shadow-2xl border border-red-800/20">
         <h2 className="text-3xl font-bold text-red-500 text-center mb-8 tracking-wide">Upload New Tool</h2>
         <form onSubmit={handleSubmit} className="space-y-6">
@@ -335,17 +474,139 @@ const UploadToolPage: React.FC = () => {
               </div>
             </div>
 
-            {/* Description */}
+            {/* Description with Formatting Toolbar */}
             <div className="col-span-1 md:col-span-2">
               <label className="block text-sm text-gray-300 mb-1">Description</label>
+              <div className="flex flex-wrap gap-2 mb-2">
+                <button
+                  type="button"
+                  onClick={() => applyTextFormat('center')}
+                  className="px-2 py-1 bg-gray-700 text-white rounded hover:bg-gray-600"
+                  title="Center Text"
+                >
+                  Center
+                </button>
+                <button
+                  type="button"
+                  onClick={() => applyTextFormat('underline')}
+                  className="px-2 py-1 bg-gray-700 text-white rounded hover:bg-gray-600"
+                  title="Underline Text"
+                >
+                  Underline
+                </button>
+                <button
+                  type="button"
+                  onClick={() => applyTextFormat('bold')}
+                  className="px-2 py-1 bg-gray-700 text-white rounded hover:bg-gray-600 flex items-center gap-1"
+                  title="Bold Text"
+                >
+                  <Bold className="h-4 w-4" />
+                  Bold
+                </button>
+                <button
+                  type="button"
+                  onClick={() => applyTextFormat('size=sm')}
+                  className="px-2 py-1 bg-gray-700 text-white rounded hover:bg-gray-600 flex items-center gap-1"
+                  title="Small Text"
+                >
+                  <Type className="h-4 w-4" />
+                  Small
+                </button>
+                <button
+                  type="button"
+                  onClick={() => applyTextFormat('size=md')}
+                  className="px-2 py-1 bg-gray-700 text-white rounded hover:bg-gray-600 flex items-center gap-1"
+                  title="Medium Text"
+                >
+                  <Type className="h-4 w-4" />
+                  Medium
+                </button>
+                <button
+                  type="button"
+                  onClick={() => applyTextFormat('size=lg')}
+                  className="px-2 py-1 bg-gray-700 text-white rounded hover:bg-gray-600 flex items-center gap-1"
+                  title="Large Text"
+                >
+                  <Type className="h-4 w-4" />
+                  Large
+                </button>
+                <button
+                  type="button"
+                  onClick={() => applyTextFormat('color=red')}
+                  className="px-2 py-1 bg-red-600 text-white rounded hover:bg-red-700"
+                  title="Red Text"
+                >
+                  Red
+                </button>
+                <button
+                  type="button"
+                  onClick={() => applyTextFormat('color=green')}
+                  className="px-2 py-1 bg-green-600 text-white rounded hover:bg-green-700"
+                  title="Green Text"
+                >
+                  Green
+                </button>
+                <button
+                  type="button"
+                  onClick={() => applyTextFormat('color=blue')}
+                  className="px-2 py-1 bg-blue-600 text-white rounded hover:bg-blue-700"
+                  title="Blue Text"
+                >
+                  Blue
+                </button>
+                <button
+                  type="button"
+                  onClick={() => applyTextFormat('paragraph')}
+                  className="px-2 py-1 bg-gray-700 text-white rounded hover:bg-gray-600"
+                  title="Add Paragraph Break"
+                >
+                  Paragraph
+                </button>
+                <button
+                  type="button"
+                  onClick={() => applyTextFormat('bar')}
+                  className="px-2 py-1 bg-gray-700 text-white rounded hover:bg-gray-600 flex items-center gap-1"
+                  title="Add Horizontal Rule"
+                >
+                  <Minus className="h-4 w-4" />
+                  HR
+                </button>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={linkUrl}
+                    onChange={handleLinkUrlChange}
+                    placeholder="Enter link URL"
+                    className="px-2 py-1 bg-black/30 border border-red-800/40 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-red-600"
+                    disabled={isSubmitting}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => applyTextFormat('link')}
+                    className="px-2 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 flex items-center gap-1"
+                    title="Add Link"
+                  >
+                    <Link className="h-4 w-4" />
+                    Add Link
+                  </button>
+                </div>
+              </div>
               <textarea
+                ref={textareaRef}
                 name="description"
                 value={formData.description}
                 onChange={handleChange}
-                placeholder="Enter detailed description"
+                placeholder="Enter description with [center], [underline], [bold], [size=sm], [size=md], [size=lg], [color=red], [color=green], [color=blue], [link href='URL']text[/link], [bar/] tags"
                 className="w-full h-32 p-3 bg-black/30 border border-red-800/40 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-red-600 resize-y transition-all duration-200"
                 disabled={isSubmitting}
               />
+              <div className="mt-4">
+                <h3 className="text-sm text-gray-300 mb-2">Preview</h3>
+                <div
+                  className="text-white prose prose-invert max-w-none"
+                  dangerouslySetInnerHTML={{ __html: convertToHtml(formData.description) }}
+                />
+              </div>
             </div>
 
             {/* Tool Image Upload + Preview */}
@@ -468,10 +729,10 @@ const UploadToolPage: React.FC = () => {
                   className="w-full pl-10 pr-4 py-3 bg-black/30 border border-red-800/40 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-red-600 transition-all duration-200"
                 >
                   <option value="">Select rating</option>
-                  <option value="0.5/1">0.5/1</option>
-                  <option value="1.5/2">1.5/2</option>
-                  <option value="2.5/3">2.5/3</option>
-                  <option value="3.5/4">3.5/4</option>
+                  <option value="0.5/5">0.5/5</option>
+                  <option value="1.5/5">1.5/5</option>
+                  <option value="2.5/5">2.5/5</option>
+                  <option value="3.5/5">3.5/5</option>
                   <option value="4.5/5">4.5/5</option>
                 </select>
               </div>
@@ -494,6 +755,23 @@ const UploadToolPage: React.FC = () => {
                   <option value="medium">Medium Risk</option>
                   <option value="high">High Risk</option>
                 </select>
+              </div>
+            </div>
+
+            {/* Date */}
+            <div className="col-span-1 relative">
+              <label className="block text-sm text-gray-300 mb-1">Release Date</label>
+              <div className="relative">
+                <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                <input
+                  type="text"
+                  name="date"
+                  value={formData.date}
+                  onChange={handleChange}
+                  placeholder="e.g., Oct 15, 2025"
+                  className="w-full pl-10 pr-4 py-3 bg-black/30 border border-red-800/40 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-red-600 transition-all duration-200"
+                  disabled={isSubmitting}
+                />
               </div>
             </div>
           </div>

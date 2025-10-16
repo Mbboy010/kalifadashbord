@@ -159,52 +159,48 @@ const convertToHtml = (text: string): string => {
   return result;
 };
 
-// Validate description tags
-const validateDescription = (text: string) => {
-  const tagPairs = [
-    { open: /\[center\]/g, close: /\[\/center\]/g },
-    { open: /\[underline\]/g, close: /\[\/underline\]/g },
-    { open: /\[bold\]/g, close: /\[\/bold\]/g },
-    { open: /\[size=sm\]/g, close: /\[\/size\]/g },
-    { open: /\[size=md\]/g, close: /\[\/size\]/g },
-    { open: /\[size=lg\]/g, close: /\[\/size\]/g },
-    { open: /\[color=red\]/g, close: /\[\/color\]/g },
-    { open: /\[color=green\]/g, close: /\[\/color\]/g },
-    { open: /\[color=blue\]/g, close: /\[\/color\]/g },
-    { open: /\[link href="[^"]+"\]/g, close: /\[\/link\]/g },
-  ];
-  const selfClosingTags = [/\[bar\/\]/g];
+// ✅ Improved and stable tag validator
+const validateDescription = (text: string): boolean => {
+  // Supported paired tags
+  const pairedTags = ["center", "underline", "bold", "size", "color", "link"];
+  // Supported self-closing tags
+  const selfClosingTags = ["bar"];
 
-  // Track open tags
-  const tagStack: string[] = [];
-  const tags = text.match(/\[\/?[a-zA-Z0-9= "]*\]/g) || [];
+  const tagPattern = /\[\/?[a-zA-Z]+(?:=[^\]]+)?\/?\]/g;
+  const tags = text.match(tagPattern) || [];
+  const stack: string[] = [];
 
   for (const tag of tags) {
-    if (tag.startsWith('[') && !tag.endsWith('/]')) {
-      // Opening tag
-      const tagName = tag.match(/\[([a-zA-Z0-9= "]+)\]/)?.[1];
-      if (tagName) tagStack.push(tagName);
-    } else if (tag.startsWith('[/')) {
-      // Closing tag
-      const closeTagName = tag.match(/\[\/([a-zA-Z0-9= "]+)\]/)?.[1];
-      if (closeTagName) {
-        const lastOpenTag = tagStack.pop();
-        if (lastOpenTag !== closeTagName) return false; // Mismatched tags
+    // ✅ Handle self-closing tags like [bar/]
+    const selfCloseMatch = tag.match(/^\[([a-zA-Z]+)\/\]$/);
+    if (selfCloseMatch) {
+      const tagName = selfCloseMatch[1];
+      if (!selfClosingTags.includes(tagName)) return false; // Invalid self-close tag
+      continue;
+    }
+
+    // ✅ Handle opening tags like [center], [size=lg], [color=red], [link href="..."]
+    const openMatch = tag.match(/^\[([a-zA-Z]+)(?:=[^\]]+)?\]$/);
+    if (openMatch) {
+      const tagName = openMatch[1];
+      if (!pairedTags.includes(tagName)) return false; // Unknown tag
+      stack.push(tagName);
+      continue;
+    }
+
+    // ✅ Handle closing tags like [/center], [/size], [/color], [/link]
+    const closeMatch = tag.match(/^\[\/([a-zA-Z]+)\]$/);
+    if (closeMatch) {
+      const tagName = closeMatch[1];
+      const lastOpen = stack.pop();
+      if (lastOpen !== tagName) {
+        return false; // Mismatched tag
       }
     }
   }
 
-  // Check if all tags are closed
-  if (tagStack.length > 0) return false;
-
-  // Check self-closing tags (should not have a corresponding close tag)
-  for (const selfClose of selfClosingTags) {
-    if (text.match(selfClose)?.length !== (text.match(new RegExp(`\\${selfClose.source.slice(0, -2)}\\]`)) || []).length) {
-      return false;
-    }
-  }
-
-  return true;
+  // ✅ Stack must be empty (no unclosed tags)
+  return stack.length === 0;
 };
 
 const UploadToolPage: React.FC = () => {

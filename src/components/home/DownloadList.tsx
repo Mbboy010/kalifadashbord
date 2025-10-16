@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
-import { Download, Upload, Server, FilePlus } from 'lucide-react';
+import { Download, Upload, Server, FilePlus, Youtube } from 'lucide-react';
 import { gsap } from 'gsap';
 import { useRouter } from 'next/navigation';
 
@@ -52,6 +52,16 @@ const ButtonList: React.FC = () => {
       icon: FilePlus,
       onClick: () => router.push('/upload-system'),
     },
+    {
+      label: 'YouTube Videos List',
+      icon: Youtube,
+      onClick: () => router.push('/youtube-videos'),
+    },
+    {
+      label: 'Upload to YouTube',
+      icon: Upload,
+      onClick: () => router.push('/upload-youtube'),
+    },
   ];
 
   return (
@@ -68,7 +78,7 @@ const ButtonList: React.FC = () => {
                   buttonRefs.current[index] = el;
                 }}
                 onClick={button.onClick}
-                className="w-full flex items-center justify-start gap-3 px-4 py-3 rounded-lg bg-black/40 text-white hover:bg-red-600 transition-all"
+                className="w-full flex items-center justify-start gap-3 px-4 py-4 rounded-lg bg-black/40 text-white hover:bg-red-600 transition-all"
               >
                 <Icon className="h-5 w-5 text-red-400" />
                 <span className="text-left">{button.label}</span>

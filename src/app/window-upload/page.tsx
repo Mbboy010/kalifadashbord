@@ -127,16 +127,16 @@ const resizeImage = (file: File, maxSize = 800): Promise<File> => {
 const convertToHtml = (text: string): string => {
   let result = text;
   const tagPairs = [
-    { open: /\[center\](.*?)\[\/center\]/gs, replace: '<div class="text-center">$1</div>' },
-    { open: /\[underline\](.*?)\[\/underline\]/gs, replace: '<span class="underline">$1</span>' },
-    { open: /\[bold\](.*?)\[\/bold\]/gs, replace: '<span class="font-bold">$1</span>' },
-    { open: /\[size=sm\](.*?)\[\/size\]/gs, replace: '<span class="text-sm">$1</span>' },
-    { open: /\[size=md\](.*?)\[\/size\]/gs, replace: '<span class="text-base">$1</span>' },
-    { open: /\[size=lg\](.*?)\[\/size\]/gs, replace: '<span class="text-lg">$1</span>' },
-    { open: /\[color=red\](.*?)\[\/color\]/gs, replace: '<span class="text-red-500">$1</span>' },
-    { open: /\[color=green\](.*?)\[\/color\]/gs, replace: '<span class="text-green-500">$1</span>' },
-    { open: /\[color=blue\](.*?)\[\/color\]/gs, replace: '<span class="text-blue-500">$1</span>' },
-    { open: /\[link href="([^"]+)"\](.*?)\[\/link\]/gs, replace: '<a href="$1" class="text-blue-400 hover:underline" target="_blank" rel="noopener noreferrer">$2</a>' },
+    { open: /\[center\](.*?)\[\/center\]/g, replace: '<div class="text-center">$1</div>' },
+    { open: /\[underline\](.*?)\[\/underline\]/g, replace: '<span class="underline">$1</span>' },
+    { open: /\[bold\](.*?)\[\/bold\]/g, replace: '<span class="font-bold">$1</span>' },
+    { open: /\[size=sm\](.*?)\[\/size\]/g, replace: '<span class="text-sm">$1</span>' },
+    { open: /\[size=md\](.*?)\[\/size\]/g, replace: '<span class="text-base">$1</span>' },
+    { open: /\[size=lg\](.*?)\[\/size\]/g, replace: '<span class="text-lg">$1</span>' },
+    { open: /\[color=red\](.*?)\[\/color\]/g, replace: '<span class="text-red-500">$1</span>' },
+    { open: /\[color=green\](.*?)\[\/color\]/g, replace: '<span class="text-green-500">$1</span>' },
+    { open: /\[color=blue\](.*?)\[\/color\]/g, replace: '<span class="text-blue-500">$1</span>' },
+    { open: /\[link href="([^"]+)"\](.*?)\[\/link\]/g, replace: '<a href="$1" class="text-blue-400 hover:underline" target="_blank" rel="noopener noreferrer">$2</a>' },
   ];
   const selfClosingTags = [/\[bar\/\]/g];
 

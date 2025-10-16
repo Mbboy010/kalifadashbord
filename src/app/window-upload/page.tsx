@@ -14,6 +14,7 @@ interface ToolForm {
   downloads: number;
   image: File | null;
   downloadFile: File | null;
+  downloadUrl: string | null; // New field for link option
   priceType: 'Free' | 'Paid';
   price: number | null;
   os: string;
@@ -23,6 +24,7 @@ interface ToolForm {
   security: string;
   screenshots: File[];
   size: string;
+  downloadType: 'file' | 'link'; // New field to track download type
 }
 
 // Crop and resize image before upload (main tool image only, force PNG)
@@ -210,6 +212,7 @@ const UploadToolPage: React.FC = () => {
     description: '',
     image: null,
     downloadFile: null,
+    downloadUrl: null, // Initialized for link option
     downloads: 0,
     priceType: 'Free',
     price: null,
@@ -220,6 +223,7 @@ const UploadToolPage: React.FC = () => {
     security: '',
     screenshots: [],
     size: '',
+    downloadType: 'file', // Default to file upload
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -233,9 +237,25 @@ const UploadToolPage: React.FC = () => {
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
+  // Handle download type change
+  const handleDownloadTypeChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const value = e.target.value as 'file' | 'link';
+    setFormData((prev) => ({
+      ...prev,
+      downloadType: value,
+      downloadFile: value === 'file' ? prev.downloadFile : null,
+      downloadUrl: value === 'link' ? prev.downloadUrl : null,
+    }));
+  };
+
   // Handle link URL input
   const handleLinkUrlChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setLinkUrl(e.target.value);
+    setFormData((prev) => ({ ...prev, downloadUrl: e.target.value }));
+  };
+
+  // Handle size input
+  const handleSizeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setFormData((prev) => ({ ...prev, size: e.target.value }));
   };
 
   // Handle text formatting for description
@@ -353,7 +373,7 @@ const UploadToolPage: React.FC = () => {
   // Submit handler
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.title || !formData.description || !formData.image || !formData.downloadFile) {
+    if (!formData.title || !formData.description || !formData.image) {
       alert('Please fill all required fields');
       return;
     }
@@ -376,9 +396,12 @@ const UploadToolPage: React.FC = () => {
       const imageUrl = formData.image ? await uploadToAppwrite(formData.image, bucketId) : null;
       setProgress(40);
 
-      const downloadUrl = formData.downloadFile
-        ? await uploadToAppwrite(formData.downloadFile, bucketId)
-        : null;
+      let downloadUrl = null;
+      if (formData.downloadType === 'file' && formData.downloadFile) {
+        downloadUrl = await uploadToAppwrite(formData.downloadFile, bucketId);
+      } else if (formData.downloadType === 'link' && formData.downloadUrl) {
+        downloadUrl = formData.downloadUrl; // Use the provided URL directly
+      }
       setProgress(70);
 
       const screenshotUrls: string[] = [];
@@ -417,6 +440,7 @@ const UploadToolPage: React.FC = () => {
         downloads: 0,
         image: null,
         downloadFile: null,
+        downloadUrl: null,
         priceType: 'Free',
         price: null,
         os: '',
@@ -426,6 +450,7 @@ const UploadToolPage: React.FC = () => {
         security: '',
         screenshots: [],
         size: '',
+        downloadType: 'file',
       });
       setLinkUrl('');
     } catch (err) {
@@ -626,18 +651,69 @@ const UploadToolPage: React.FC = () => {
               )}
             </div>
 
-            {/* Download File */}
+            {/* Download Type Selection */}
             <div className="col-span-1">
-              <label className="block text-sm text-gray-300 mb-1">Upload File (.zip or .exe)</label>
-              <input
-                type="file"
-                accept=".zip,.exe"
-                onChange={(e) => handleFileChange(e, 'downloadFile')}
+              <label className="block text-sm text-gray-300 mb-1">Download Type</label>
+              <select
+                name="downloadType"
+                value={formData.downloadType}
+                onChange={handleDownloadTypeChange}
                 disabled={isSubmitting}
-                className="w-full text-white file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-red-600 file:text-white hover:file:bg-red-700"
-              />
-              {formData.size && <p className="text-sm text-gray-300 mt-1">Size: {formData.size}</p>}
+                className="w-full p-3 bg-black/30 border border-red-800/40 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-red-600 transition-all duration-200"
+              >
+                <option value="file">File</option>
+                <option value="link">Link</option>
+              </select>
             </div>
+
+            {/* File Upload or Link Inputs */}
+            {formData.downloadType === 'file' && (
+              <div className="col-span-1">
+                <label className="block text-sm text-gray-300 mb-1">Upload File (.zip or .exe)</label>
+                <input
+                  type="file"
+                  accept=".zip,.exe"
+                  onChange={(e) => handleFileChange(e, 'downloadFile')}
+                  disabled={isSubmitting}
+                  className="w-full text-white file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-red-600 file:text-white hover:file:bg-red-700"
+                />
+                {formData.size && <p className="text-sm text-gray-300 mt-1">Size: {formData.size}</p>}
+              </div>
+            )}
+            {formData.downloadType === 'link' && (
+              <>
+                <div className="col-span-1 relative">
+                  <label className="block text-sm text-gray-300 mb-1">Download URL</label>
+                  <div className="relative">
+                    <Link className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                    <input
+                      type="text"
+                      name="downloadUrl"
+                      value={formData.downloadUrl || ''}
+                      onChange={handleLinkUrlChange}
+                      placeholder="Enter download URL"
+                      className="w-full pl-10 pr-4 py-3 bg-black/30 border border-red-800/40 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-red-600 transition-all duration-200"
+                      disabled={isSubmitting}
+                    />
+                  </div>
+                </div>
+                <div className="col-span-1 relative">
+                  <label className="block text-sm text-gray-300 mb-1">Size (MB)</label>
+                  <div className="relative">
+                    <Tag className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                    <input
+                      type="text"
+                      name="size"
+                      value={formData.size}
+                      onChange={handleSizeChange}
+                      placeholder="e.g., 10.5 MB"
+                      className="w-full pl-10 pr-4 py-3 bg-black/30 border border-red-800/40 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-red-600 transition-all duration-200"
+                      disabled={isSubmitting}
+                    />
+                  </div>
+                </div>
+              </>
+            )}
 
             {/* Price Selection */}
             <div className="col-span-1">
@@ -753,23 +829,6 @@ const UploadToolPage: React.FC = () => {
                 </select>
               </div>
             </div>
-
-            {/* Date */}
-            <div className="col-span-1 relative">
-              <label className="block text-sm text-gray-300 mb-1">Release Date</label>
-              <div className="relative">
-                <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                <input
-                  type="text"
-                  name="date"
-                  value={formData.date}
-                  onChange={handleChange}
-                  placeholder="e.g., Oct 15, 2025"
-                  className="w-full pl-10 pr-4 py-3 bg-black/30 border border-red-800/40 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-red-600 transition-all duration-200"
-                  disabled={isSubmitting}
-                />
-              </div>
-            </div>
           </div>
 
           {/* Screenshots Upload + Preview */}
@@ -828,7 +887,8 @@ const UploadToolPage: React.FC = () => {
                 !formData.title ||
                 !formData.description ||
                 !formData.image ||
-                !formData.downloadFile
+                (formData.downloadType === 'file' && !formData.downloadFile) ||
+                (formData.downloadType === 'link' && !formData.downloadUrl)
               }
               className="w-full py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 flex items-center justify-center gap-2 font-semibold shadow-md hover:shadow-lg transition-all duration-200 disabled:bg-gray-500 disabled:cursor-not-allowed"
             >

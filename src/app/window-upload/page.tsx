@@ -161,47 +161,50 @@ const convertToHtml = (text: string): string => {
   return result;
 };
 
-// ✅ Improved and stable tag validator
+// ✅ Improved robust validator
 const validateDescription = (text: string): boolean => {
-  // Supported paired tags
+  // Define supported tags
   const pairedTags = ["center", "underline", "bold", "size", "color", "link"];
-  // Supported self-closing tags
   const selfClosingTags = ["bar"];
 
-  const tagPattern = /\[\/?[a-zA-Z]+(?:=[^\]]+)?\/?\]/g;
+  // Match all tags like [tag], [tag=val], [tag attr="val"], [/tag], [tag/]
+  const tagPattern = /\[\/?[a-zA-Z]+(?:=[^\]]+)?(?: [^\]]+)?\/?\]/g;
   const tags = text.match(tagPattern) || [];
   const stack: string[] = [];
 
   for (const tag of tags) {
-    // ✅ Handle self-closing tags like [bar/]
+    // ✅ Self-closing tag, like [bar/]
     const selfCloseMatch = tag.match(/^\[([a-zA-Z]+)\/\]$/);
     if (selfCloseMatch) {
       const tagName = selfCloseMatch[1];
-      if (!selfClosingTags.includes(tagName)) return false; // Invalid self-close tag
+      if (!selfClosingTags.includes(tagName)) return false;
       continue;
     }
 
-    // ✅ Handle opening tags like [center], [size=lg], [color=red], [link href="..."]
-    const openMatch = tag.match(/^\[([a-zA-Z]+)(?:=[^\]]+)?\]$/);
+    // ✅ Opening tag (with or without attributes)
+    const openMatch = tag.match(/^\[([a-zA-Z]+)(?:=[^\]]+)?(?: [^\]]+)?\]$/);
     if (openMatch) {
       const tagName = openMatch[1];
-      if (!pairedTags.includes(tagName)) return false; // Unknown tag
+      if (!pairedTags.includes(tagName)) return false;
       stack.push(tagName);
       continue;
     }
 
-    // ✅ Handle closing tags like [/center], [/size], [/color], [/link]
+    // ✅ Closing tag like [/center], [/size], [/color], [/link]
     const closeMatch = tag.match(/^\[\/([a-zA-Z]+)\]$/);
     if (closeMatch) {
       const tagName = closeMatch[1];
+      if (!pairedTags.includes(tagName)) return false;
+
+      // Check matching opening tag
       const lastOpen = stack.pop();
       if (lastOpen !== tagName) {
-        return false; // Mismatched tag
+        return false; // Mismatched nesting
       }
     }
   }
 
-  // ✅ Stack must be empty (no unclosed tags)
+  // ✅ Must close all tags
   return stack.length === 0;
 };
 
@@ -218,7 +221,7 @@ const UploadToolPage: React.FC = () => {
     price: null,
     os: '',
     architecture: '',
-    date: new Date().toLocaleDateString('en-US', { timeZone: 'Africa/Lagos' }),
+    date: new Date().toISOString(), // Changed to ISO format
     rating: '',
     security: '',
     screenshots: [],
@@ -227,7 +230,7 @@ const UploadToolPage: React.FC = () => {
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [progress, setProgress] = useState(0);
-  const [linkUrl, setLinkUrl] = useState('');
+  const [linkUrl, setLinkUrl] = useState(''); // State for description link formatting
 
   // Handle text/select inputs
   const handleChange = (
@@ -248,8 +251,13 @@ const UploadToolPage: React.FC = () => {
     }));
   };
 
-  // Handle link URL input
-  const handleLinkUrlChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Handle link URL input for description formatting
+  const handleDescriptionLinkUrlChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setLinkUrl(e.target.value);
+  };
+
+  // Handle download URL input
+  const handleDownloadUrlChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData((prev) => ({ ...prev, downloadUrl: e.target.value }));
   };
 
@@ -424,7 +432,7 @@ const UploadToolPage: React.FC = () => {
         price: formData.priceType === 'Paid' ? formData.price ?? 0 : 0,
         os: formData.os || '',
         architecture: formData.architecture || '',
-        date: formData.date || new Date().toISOString(),
+        date: formData.date, // Already in ISO format
         rating: formData.rating || '',
         security: formData.security || '',
         screenshots: screenshotUrls,
@@ -445,7 +453,7 @@ const UploadToolPage: React.FC = () => {
         price: null,
         os: '',
         architecture: '',
-        date: new Date().toLocaleDateString('en-US', { timeZone: 'Africa/Lagos' }),
+        date: new Date().toISOString(), // Reset to ISO format
         rating: '',
         security: '',
         screenshots: [],
@@ -596,7 +604,7 @@ const UploadToolPage: React.FC = () => {
                   <input
                     type="text"
                     value={linkUrl}
-                    onChange={handleLinkUrlChange}
+                    onChange={handleDescriptionLinkUrlChange}
                     placeholder="Enter link URL"
                     className="px-2 py-1 bg-black/30 border border-red-800/40 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-red-600"
                     disabled={isSubmitting}
@@ -690,7 +698,7 @@ const UploadToolPage: React.FC = () => {
                       type="text"
                       name="downloadUrl"
                       value={formData.downloadUrl || ''}
-                      onChange={handleLinkUrlChange}
+                      onChange={handleDownloadUrlChange}
                       placeholder="Enter download URL"
                       className="w-full pl-10 pr-4 py-3 bg-black/30 border border-red-800/40 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-red-600 transition-all duration-200"
                       disabled={isSubmitting}

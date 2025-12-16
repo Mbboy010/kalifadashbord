@@ -14,7 +14,7 @@ interface ToolForm {
   downloads: number;
   image: File | null;
   downloadFile: File | null;
-  downloadUrl: string | null; // New field for link option
+  downloadUrl: string | null;
   priceType: 'Free' | 'Paid';
   price: number | null;
   os: string;
@@ -24,7 +24,7 @@ interface ToolForm {
   security: string;
   screenshots: File[];
   size: string;
-  downloadType: 'file' | 'link'; // New field to track download type
+  downloadType: 'file' | 'link';
 }
 
 // Crop and resize image before upload (main tool image only, force PNG)
@@ -163,17 +163,14 @@ const convertToHtml = (text: string): string => {
 
 // ✅ Improved robust validator
 const validateDescription = (text: string): boolean => {
-  // Define supported tags
   const pairedTags = ["center", "underline", "bold", "size", "color", "link"];
   const selfClosingTags = ["bar"];
 
-  // Match all tags like [tag], [tag=val], [tag attr="val"], [/tag], [tag/]
   const tagPattern = /\[\/?[a-zA-Z]+(?:=[^\]]+)?(?: [^\]]+)?\/?\]/g;
   const tags = text.match(tagPattern) || [];
   const stack: string[] = [];
 
   for (const tag of tags) {
-    // ✅ Self-closing tag, like [bar/]
     const selfCloseMatch = tag.match(/^\[([a-zA-Z]+)\/\]$/);
     if (selfCloseMatch) {
       const tagName = selfCloseMatch[1];
@@ -181,7 +178,6 @@ const validateDescription = (text: string): boolean => {
       continue;
     }
 
-    // ✅ Opening tag (with or without attributes)
     const openMatch = tag.match(/^\[([a-zA-Z]+)(?:=[^\]]+)?(?: [^\]]+)?\]$/);
     if (openMatch) {
       const tagName = openMatch[1];
@@ -190,21 +186,18 @@ const validateDescription = (text: string): boolean => {
       continue;
     }
 
-    // ✅ Closing tag like [/center], [/size], [/color], [/link]
     const closeMatch = tag.match(/^\[\/([a-zA-Z]+)\]$/);
     if (closeMatch) {
       const tagName = closeMatch[1];
       if (!pairedTags.includes(tagName)) return false;
 
-      // Check matching opening tag
       const lastOpen = stack.pop();
       if (lastOpen !== tagName) {
-        return false; // Mismatched nesting
+        return false;
       }
     }
   }
 
-  // ✅ Must close all tags
   return stack.length === 0;
 };
 
@@ -215,22 +208,22 @@ const UploadToolPage: React.FC = () => {
     description: '',
     image: null,
     downloadFile: null,
-    downloadUrl: null, // Initialized for link option
+    downloadUrl: null,
     downloads: 0,
     priceType: 'Free',
     price: null,
     os: '',
     architecture: '',
-    date: new Date().toISOString(), // Changed to ISO format
+    date: new Date().toISOString(),
     rating: '',
     security: '',
     screenshots: [],
     size: '',
-    downloadType: 'file', // Default to file upload
+    downloadType: 'file',
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [progress, setProgress] = useState(0);
-  const [linkUrl, setLinkUrl] = useState(''); // State for description link formatting
+  const [linkUrl, setLinkUrl] = useState('');
 
   // Handle text/select inputs
   const handleChange = (
@@ -354,8 +347,9 @@ const UploadToolPage: React.FC = () => {
   };
 
   // Drag & drop (screenshots only, resize no crop)
-  const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => e.preventDefault();
-  const handleDrop = async (e: React.DragEvent<HTMLDivElement>) => {
+  const handleDragOver = (e: React.DragEvent<HTMLDivElement> | React.DragEvent<HTMLLabelElement>) => e.preventDefault();
+  
+  const handleDrop = async (e: React.DragEvent<HTMLDivElement> | React.DragEvent<HTMLLabelElement>) => {
     e.preventDefault();
     const files = Array.from(e.dataTransfer.files);
     const resizedFiles = await Promise.all(files.map((f) => resizeImage(f, 800)));
@@ -408,7 +402,7 @@ const UploadToolPage: React.FC = () => {
       if (formData.downloadType === 'file' && formData.downloadFile) {
         downloadUrl = await uploadToAppwrite(formData.downloadFile, bucketId);
       } else if (formData.downloadType === 'link' && formData.downloadUrl) {
-        downloadUrl = formData.downloadUrl; // Use the provided URL directly
+        downloadUrl = formData.downloadUrl;
       }
       setProgress(70);
 
@@ -432,7 +426,7 @@ const UploadToolPage: React.FC = () => {
         price: formData.priceType === 'Paid' ? formData.price ?? 0 : 0,
         os: formData.os || '',
         architecture: formData.architecture || '',
-        date: formData.date, // Already in ISO format
+        date: formData.date,
         rating: formData.rating || '',
         security: formData.security || '',
         screenshots: screenshotUrls,
@@ -453,7 +447,7 @@ const UploadToolPage: React.FC = () => {
         price: null,
         os: '',
         architecture: '',
-        date: new Date().toISOString(), // Reset to ISO format
+        date: new Date().toISOString(),
         rating: '',
         security: '',
         screenshots: [],
@@ -625,7 +619,7 @@ const UploadToolPage: React.FC = () => {
                 name="description"
                 value={formData.description}
                 onChange={handleChange}
-                placeholder="Enter description with [center], [underline], [bold], [size=sm], [size=md], [size=lg], [color=red], [color=green], [color=blue], [link href='URL']text[/link], [bar/] tags"
+                placeholder="Enter description..."
                 className="w-full h-32 p-3 bg-black/30 border border-red-800/40 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-red-600 resize-y transition-all duration-200"
                 disabled={isSubmitting}
               />
@@ -839,13 +833,13 @@ const UploadToolPage: React.FC = () => {
             </div>
           </div>
 
-          {/* Screenshots Upload + Preview */}
+          {/* Screenshots Upload + Preview (FIXED FOR MOBILE/IPHONE) */}
           <div>
             <label className="block text-sm text-gray-300 mb-2">Screenshots</label>
-            <div
+            <label
               onDragOver={handleDragOver}
               onDrop={handleDrop}
-              className="border-2 border-dashed border-red-800/40 p-4 rounded-lg bg-black/20 hover:bg-black/30 transition-colors duration-200"
+              className="border-2 border-dashed border-red-800/40 p-4 rounded-lg bg-black/20 hover:bg-black/30 transition-colors duration-200 cursor-pointer flex flex-col items-center justify-center min-h-[100px]"
             >
               <input
                 type="file"
@@ -853,10 +847,12 @@ const UploadToolPage: React.FC = () => {
                 multiple
                 onChange={(e) => handleFileChange(e, 'screenshots')}
                 disabled={isSubmitting}
-                className="w-full text-white file:hidden"
+                className="hidden" 
               />
-              <p className="text-gray-400 text-center">Drag & drop images here or click to upload</p>
-            </div>
+              <p className="text-gray-400 text-center pointer-events-none">
+                Drag & drop images here or click to upload
+              </p>
+            </label>
             <div className="mt-4 grid grid-cols-2 md:grid-cols-3 gap-4">
               {formData.screenshots.map((file, index) => (
                 <div key={index} className="relative group">
@@ -869,7 +865,7 @@ const UploadToolPage: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => handleRemoveScreenshot(index)}
-                    className="absolute top-1 right-1 bg-red-600 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200"
+                    className="absolute top-1 right-1 bg-red-600 text-white rounded-full p-1 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity duration-200"
                   >
                     <Minus className="h-4 w-4" />
                   </button>

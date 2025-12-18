@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
+import { usePathname } from 'next/navigation'; // ✅ Import usePathname
 import { MoreVertical, Settings, LogOut, LayoutDashboard, User } from 'lucide-react';
 import { gsap } from 'gsap';
 import { getAuth, onAuthStateChanged, signOut } from 'firebase/auth';
@@ -9,8 +10,6 @@ import { app } from '@/server/firebaseApi';
 
 const auth = getAuth(app);
 
-// Simple internal ShinyText component to ensure the UI looks good immediately
-// You can replace this with your own import if you prefer.
 const ShinyText = ({ text }: { text: string }) => {
   return (
     <span className="bg-clip-text text-transparent bg-gradient-to-r from-gray-200 via-white to-gray-200 font-bold tracking-tight animate-pulse">
@@ -20,10 +19,15 @@ const ShinyText = ({ text }: { text: string }) => {
 };
 
 const Navigation: React.FC = () => {
+  const pathname = usePathname(); // ✅ Get current route
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const menuRef = useRef<HTMLDivElement | null>(null);
   const navRef = useRef<HTMLDivElement | null>(null);
+
+  // ✅ Check if navigation should be hidden
+  // Matches '/window-upload' strictly OR '/windows-files/...' (dynamic id)
+  const isHidden = pathname === '/window-upload' || pathname?.startsWith('/windows-files/');
 
   // Auth Listener
   useEffect(() => {
@@ -35,11 +39,13 @@ const Navigation: React.FC = () => {
 
   // Entrance Animation
   useEffect(() => {
-    gsap.fromTo(navRef.current, 
-      { y: -100, opacity: 0 },
-      { y: 0, opacity: 1, duration: 1.2, ease: 'power4.out', delay: 0.2 }
-    );
-  }, []);
+    if (!isHidden && navRef.current) {
+      gsap.fromTo(navRef.current, 
+        { y: -100, opacity: 0 },
+        { y: 0, opacity: 1, duration: 1.2, ease: 'power4.out', delay: 0.2 }
+      );
+    }
+  }, [isHidden]); // Re-run if hidden state changes
 
   // Menu Animation
   useEffect(() => {
@@ -77,6 +83,11 @@ const Navigation: React.FC = () => {
       console.error('Logout failed:', error);
     }
   };
+
+  // ✅ Return null to hide navigation on specific pages
+  if (isHidden) {
+    return null;
+  }
 
   return (
     <div className="fixed top-0 left-0 w-full z-50 pointer-events-none flex justify-center pt-6 px-4">
@@ -174,7 +185,7 @@ const Navigation: React.FC = () => {
                      Login
                   </Link>
                 )}
-              </div>
+              </div>  
             </div>
           </div>
         </div>

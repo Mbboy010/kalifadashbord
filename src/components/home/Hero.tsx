@@ -78,7 +78,7 @@ export default function Hero() {
   ];
 
   return (
-    <section className="relative mt-10 w-full pt-12 pb-8 px-4 sm:px-6 lg:px-8 overflow-hidden">
+    <section className="relative mt-14 w-full pt-12 pb-8 px-4 sm:px-6 lg:px-8 overflow-hidden">
       
       {/* Background Glows */}
       <div className="absolute top-0 left-1/4 w-96 h-96 bg-red-900/20 rounded-full blur-[128px] pointer-events-none" />

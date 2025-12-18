@@ -1,36 +1,28 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import {
-  Upload,
-  Tag,
-  Monitor,
-  Cpu,
-  Star,
-  Shield,
-  Loader2,
-  Minus,
-  Plus,
-  Calendar,
-  Link,
-  Type,
-  Bold,
+import { 
+  Minus, Tag, Monitor, Cpu, Shield, Star, Loader2, Link as LinkIcon, 
+  Type, Bold, Image as ImageIcon, UploadCloud, X, FileArchive, DollarSign, 
+  AlignCenter, Underline, CheckCircle2, Eye, Edit3, AlignLeft, 
+  Plus, LayoutGrid, HardDrive, Save
 } from 'lucide-react';
 import { gsap } from 'gsap';
 import { useRouter, useParams } from 'next/navigation';
+// ✅ Real Backend Imports
 import { db } from '@/server/firebaseApi';
 import { doc, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { storage } from '@/server/appwrite';
-import { v4 as uuidv4 } from 'uuid';
 
+// --- Interfaces ---
 interface ToolForm {
   id: string;
   title: string;
   description: string;
-  image: string;
-  downloadFile?: File | null;
-  downloadUrl: string | null;
   downloads: number;
+  image: string | null;
+  downloadFile: File | null;
+  downloadUrl: string | null;
   priceType: 'Free' | 'Paid';
   price: number | null;
   os: string;
@@ -38,17 +30,17 @@ interface ToolForm {
   date: string;
   rating: string;
   security: string;
-  screenshots: string[];
+  screenshots: string[]; // URLs
   size: string;
   downloadType: 'file' | 'link';
 }
 
+// --- Helper Functions ---
 const cropAndResizeImage = (file: File, maxSize = 500): Promise<File> => {
-  return new Promise((resolve, reject) => {
+  return new Promise((resolve) => {
     const img = new Image();
     const reader = new FileReader();
     reader.onload = (e) => (img.src = e.target?.result as string);
-    img.onerror = (err) => reject(err);
     img.onload = () => {
       const size = Math.min(img.width, img.height);
       const canvas = document.createElement('canvas');
@@ -60,825 +52,511 @@ const cropAndResizeImage = (file: File, maxSize = 500): Promise<File> => {
         const y = (img.height - size) / 2;
         ctx.drawImage(img, x, y, size, size, 0, 0, maxSize, maxSize);
       }
-      canvas.toBlob(
-        (blob) => (blob ? resolve(new File([blob], file.name.replace(/\.[^/.]+$/, '') + '.png', { type: 'image/png' })) : reject(new Error('Canvas toBlob returned null'))),
-        'image/png',
-        1.0
-      );
+      canvas.toBlob((blob) => {
+        if (blob) resolve(new File([blob], file.name.replace(/\.[^/.]+$/, '') + '.png', { type: 'image/png' }));
+      }, 'image/png', 1.0);
     };
     reader.readAsDataURL(file);
   });
 };
 
 const resizeImage = (file: File, maxSize = 800): Promise<File> => {
-  return new Promise((resolve, reject) => {
+  return new Promise((resolve) => {
     const img = new Image();
     const reader = new FileReader();
     reader.onload = (e) => (img.src = e.target?.result as string);
-    img.onerror = (err) => reject(err);
     img.onload = () => {
-      let width = img.width;
-      let height = img.height;
+      let { width, height } = img;
       if (width > height) {
-        if (width > maxSize) {
-          height *= maxSize / width;
-          width = maxSize;
-        }
+        if (width > maxSize) { height *= maxSize / width; width = maxSize; }
       } else {
-        if (height > maxSize) {
-          width *= maxSize / height;
-          height = maxSize;
-        }
+        if (height > maxSize) { width *= maxSize / height; height = maxSize; }
       }
       const canvas = document.createElement('canvas');
-      canvas.width = Math.round(width);
-      canvas.height = Math.round(height);
+      canvas.width = width;
+      canvas.height = height;
       const ctx = canvas.getContext('2d');
-      if (ctx) ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-      canvas.toBlob(
-        (blob) => (blob ? resolve(new File([blob], file.name.replace(/\.[^/.]+$/, '') + '.png', { type: 'image/png' })) : reject(new Error('Canvas toBlob returned null'))),
-        'image/png',
-        1.0
-      );
+      if (ctx) ctx.drawImage(img, 0, 0, width, height);
+      canvas.toBlob((blob) => {
+        if (blob) resolve(new File([blob], file.name.replace(/\.[^/.]+$/, '') + '.png', { type: 'image/png' }));
+      }, 'image/png', 1.0);
     };
     reader.readAsDataURL(file);
   });
 };
 
 const toUrlString = (u: any): string => {
-  if (!u) return '';
-  if (typeof u === 'string') return u;
-  if (typeof u?.toString === 'function') return u.toString();
-  if (u?.href) return u.href;
-  return String(u);
+    if (!u) return '';
+    if (typeof u === 'string') return u;
+    if (typeof u?.toString === 'function') return u.toString();
+    if (u?.href) return u.href;
+    return String(u);
 };
 
 const uploadToAppwrite = async (file: File, bucketId: string) => {
-  const uploaded = await storage.createFile(bucketId, 'unique()', file);
-  return toUrlString(storage.getFileDownload(bucketId, uploaded.$id));
+    const uploaded = await storage.createFile(bucketId, 'unique()', file);
+    const url = storage.getFileDownload(bucketId, uploaded.$id);
+    return toUrlString(url);
 };
 
-// Convert tags to HTML
+// --- Text Processing ---
 const convertToHtml = (text: string): string => {
-  let result = text;
-  const tagPairs = [
-    { open: /\[center\](.*?)\[\/center\]/g, replace: '<div class="text-center">$1</div>' },
-    { open: /\[underline\](.*?)\[\/underline\]/g, replace: '<span class="underline">$1</span>' },
-    { open: /\[bold\](.*?)\[\/bold\]/g, replace: '<span class="font-bold">$1</span>' },
-    { open: /\[size=sm\](.*?)\[\/size\]/g, replace: '<span class="text-sm">$1</span>' },
-    { open: /\[size=md\](.*?)\[\/size\]/g, replace: '<span class="text-base">$1</span>' },
-    { open: /\[size=lg\](.*?)\[\/size\]/g, replace: '<span class="text-lg">$1</span>' },
-    { open: /\[color=red\](.*?)\[\/color\]/g, replace: '<span class="text-red-500">$1</span>' },
-    { open: /\[color=green\](.*?)\[\/color\]/g, replace: '<span class="text-green-500">$1</span>' },
-    { open: /\[color=blue\](.*?)\[\/color\]/g, replace: '<span class="text-blue-500">$1</span>' },
-    { open: /\[link href="([^"]+)"\](.*?)\[\/link\]/g, replace: '<a href="$1" class="text-blue-400 hover:underline" target="_blank" rel="noopener noreferrer">$2</a>' },
-  ];
-  const selfClosingTags = [/\[bar\/\]/g];
-
-  // Process paired tags
-  for (const { open, replace } of tagPairs) {
-    result = result.replace(open, replace);
-  }
-
-  // Process self-closing tags
-  for (const tag of selfClosingTags) {
-    result = result.replace(tag, '<hr class="border-t border-gray-600 my-2"/>');
-  }
-
-  // Replace newlines
+  let result = text || "";
+  result = result.replace(/\[center\](.*?)\[\/center\]/g, '<div class="text-center">$1</div>');
+  result = result.replace(/\[underline\](.*?)\[\/underline\]/g, '<span class="underline underline-offset-4">$1</span>');
+  result = result.replace(/\[bold\](.*?)\[\/bold\]/g, '<strong class="font-bold text-white">$1</strong>');
+  result = result.replace(/\[size=sm\](.*?)\[\/size\]/g, '<span class="text-sm">$1</span>');
+  result = result.replace(/\[size=md\](.*?)\[\/size\]/g, '<span class="text-base">$1</span>');
+  result = result.replace(/\[size=lg\](.*?)\[\/size\]/g, '<span class="text-xl font-semibold">$1</span>');
+  result = result.replace(/\[color=red\](.*?)\[\/color\]/g, '<span class="text-red-500">$1</span>');
+  result = result.replace(/\[color=green\](.*?)\[\/color\]/g, '<span class="text-emerald-500">$1</span>');
+  result = result.replace(/\[color=blue\](.*?)\[\/color\]/g, '<span class="text-blue-500">$1</span>');
+  result = result.replace(/\[link href="([^"]+)"\](.*?)\[\/link\]/g, '<a href="$1" class="text-blue-400 hover:text-blue-300 hover:underline transition-colors" target="_blank" rel="noopener noreferrer">$2</a>');
+  result = result.replace(/\[bar\/\]/g, '<hr class="border-t border-white/10 my-4"/>');
   result = result.replace(/\n\n/g, '<br/><br/>');
-
-  // Remove any unprocessed tags
-  result = result.replace(/\[\/?[a-zA-Z0-9= "]*\]/g, '');
-
-  return result;
+  result = result.replace(/\n/g, '<br/>');
+  return result.replace(/\[\/?[a-zA-Z0-9= "]*\]/g, '');
 };
 
-// ✅ Improved robust validator
 const validateDescription = (text: string): boolean => {
-  // Define supported tags
+  if(!text) return true;
   const pairedTags = ["center", "underline", "bold", "size", "color", "link"];
   const selfClosingTags = ["bar"];
-
-  // Match all tags like [tag], [tag=val], [tag attr="val"], [/tag], [tag/]
   const tagPattern = /\[\/?[a-zA-Z]+(?:=[^\]]+)?(?: [^\]]+)?\/?\]/g;
   const tags = text.match(tagPattern) || [];
   const stack: string[] = [];
 
   for (const tag of tags) {
-    // ✅ Self-closing tag, like [bar/]
     const selfCloseMatch = tag.match(/^\[([a-zA-Z]+)\/\]$/);
     if (selfCloseMatch) {
-      const tagName = selfCloseMatch[1];
-      if (!selfClosingTags.includes(tagName)) return false;
+      if (!selfClosingTags.includes(selfCloseMatch[1])) return false;
       continue;
     }
-
-    // ✅ Opening tag (with or without attributes)
     const openMatch = tag.match(/^\[([a-zA-Z]+)(?:=[^\]]+)?(?: [^\]]+)?\]$/);
     if (openMatch) {
-      const tagName = openMatch[1];
-      if (!pairedTags.includes(tagName)) return false;
-      stack.push(tagName);
+      if (!pairedTags.includes(openMatch[1])) return false;
+      stack.push(openMatch[1]);
       continue;
     }
-
-    // ✅ Closing tag like [/center], [/size], [/color], [/link]
     const closeMatch = tag.match(/^\[\/([a-zA-Z]+)\]$/);
     if (closeMatch) {
-      const tagName = closeMatch[1];
-      if (!pairedTags.includes(tagName)) return false;
-
-      // Check matching opening tag
-      const lastOpen = stack.pop();
-      if (lastOpen !== tagName) {
-        return false; // Mismatched nesting
-      }
+      if (!pairedTags.includes(closeMatch[1])) return false;
+      if (stack.pop() !== closeMatch[1]) return false;
     }
   }
-
-  // ✅ Must close all tags
   return stack.length === 0;
 };
 
+// --- Main Edit Component ---
 const EditWindowPage: React.FC = () => {
   const router = useRouter();
   const params = useParams();
   const id = params?.id as string;
+  
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
 
-  const [formData, setFormData] = useState<ToolForm>({
-    id: '',
-    title: '',
-    description: '',
-    image: '',
-    downloadFile: null,
-    downloadUrl: null,
-    downloads: 0,
-    priceType: 'Free',
-    price: null,
-    os: '',
-    architecture: '',
-    date: new Date().toISOString(),
-    rating: '',
-    security: '',
-    screenshots: [],
-    size: '',
-    downloadType: 'file',
-  });
-  const [imageFile, setImageFile] = useState<File | null>(null);
-  const [imagePreview, setImagePreview] = useState<string>('');
-  const [downloadFile, setDownloadFile] = useState<File | null>(null);
-  const [screenshotFiles, setScreenshotFiles] = useState<File[]>([]);
-  const [screenshotPreviews, setScreenshotPreviews] = useState<string[]>([]);
-  const [existingScreenshots, setExistingScreenshots] = useState<string[]>([]);
-  const [linkUrl, setLinkUrl] = useState('');
+  // State
   const [loading, setLoading] = useState(true);
+  const [formData, setFormData] = useState<ToolForm>({
+    id: '', title: '', description: '', downloads: 0, image: null,
+    downloadFile: null, downloadUrl: null, priceType: 'Free', price: null,
+    os: '', architecture: '', date: new Date().toISOString(), rating: '',
+    security: '', screenshots: [], size: '', downloadType: 'file',
+  });
+  
+  // Media State
+  const [newImageFile, setNewImageFile] = useState<File | null>(null);
+  const [newScreenshots, setNewScreenshots] = useState<File[]>([]);
+  
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [progress, setProgress] = useState(0);
-  const [uploadMessage, setUploadMessage] = useState<string | null>(null);
-  const dropRef = useRef<HTMLDivElement | null>(null);
+  const [editorMode, setEditorMode] = useState<'write' | 'review'>('write');
+  const [linkUrl, setLinkUrl] = useState('');
 
+  // 1. Fetch Data
   useEffect(() => {
-    const fetchApp = async () => {
-      try {
+    const fetchData = async () => {
         if (!id) return;
-        const docRef = doc(db, 'Windows-tools', id);
-        const docSnap = await getDoc(docRef);
-        if (docSnap.exists()) {
-          const data = docSnap.data() as ToolForm;
-          setFormData({
-            id: docSnap.id,
-            title: data.title || '',
-            description: data.description || '',
-            image: data.image || '',
-            downloadFile: null,
-            downloadUrl: data.downloadUrl || null,
-            downloads: data.downloads || 0,
-            priceType: data.priceType || 'Free',
-            price: data.price || null,
-            os: data.os || '',
-            architecture: data.architecture || '',
-            date: data.date || new Date().toISOString(),
-            rating: data.rating || '',
-            security: data.security || '',
-            screenshots: data.screenshots || [],
-            size: data.size || '',
-            downloadType: data.downloadType || 'file',
-          });
-          setImagePreview(data.image || '');
-          setExistingScreenshots(data.screenshots || []);
-        } else {
-          console.warn('No such document!');
+        try {
+            const docRef = doc(db, 'Windows-tools', id);
+            const snap = await getDoc(docRef);
+            if (snap.exists()) {
+                const data = snap.data() as ToolForm;
+                setFormData({
+                    ...data,
+                    id: snap.id,
+                    priceType: data.priceType || 'Free',
+                    downloadType: data.downloadType || 'file',
+                    screenshots: data.screenshots || [],
+                    description: data.description || '' 
+                });
+            } else {
+                alert("Tool not found");
+                router.push('/windows-tools');
+            }
+        } catch (error) {
+            console.error(error);
+        } finally {
+            setLoading(false);
         }
-      } catch (error) {
-        console.error('Error fetching document:', error);
-      } finally {
-        setLoading(false);
-      }
     };
-    fetchApp();
-  }, [id]);
+    fetchData();
+  }, [id, router]);
 
+  // Animation after load
   useEffect(() => {
     if (!loading) {
-      gsap.from('.edit-container', { opacity: 0, y: 50, duration: 0.8, ease: 'power3.out' });
-      gsap.from('.fade-item', { opacity: 0, y: 20, duration: 0.6, stagger: 0.06, delay: 0.1, ease: 'power3.out' });
+        gsap.fromTo(containerRef.current, { opacity: 0, scale: 0.95 }, { opacity: 1, scale: 1, duration: 0.6, ease: 'power2.out' });
     }
   }, [loading]);
 
+  // Handlers
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
-  const handleDownloadTypeChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const value = e.target.value as 'file' | 'link';
-    setFormData((prev) => ({
-      ...prev,
-      downloadType: value,
-      downloadFile: value === 'file' ? prev.downloadFile : null,
-      downloadUrl: value === 'link' ? prev.downloadUrl : null,
-    }));
+  // Image Handlers
+  const handleMainImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+        const cropped = await cropAndResizeImage(file, 500);
+        setNewImageFile(cropped);
+    }
   };
 
-  const handleDownloadUrlChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setFormData((prev) => ({ ...prev, downloadUrl: e.target.value }));
+  const handleNewScreenshots = async (e: React.ChangeEvent<HTMLInputElement>) => {
+     if(e.target.files) {
+         const files = Array.from(e.target.files);
+         const resized = await Promise.all(files.map(f => resizeImage(f, 800)));
+         setNewScreenshots(prev => [...prev, ...resized]);
+     }
   };
 
-  const handleSizeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setFormData((prev) => ({ ...prev, size: e.target.value }));
+  const removeExistingScreenshot = (index: number) => {
+     setFormData(prev => ({
+         ...prev,
+         screenshots: prev.screenshots.filter((_, i) => i !== index)
+     }));
   };
 
-  const handleDescriptionLinkUrlChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setLinkUrl(e.target.value);
+  const removeNewScreenshot = (index: number) => {
+      setNewScreenshots(prev => prev.filter((_, i) => i !== index));
   };
 
-  const applyTextFormat = (
-    format: 'center' | 'underline' | 'bold' | 'size=sm' | 'size=md' | 'size=lg' | 'color=red' | 'color=green' | 'color=blue' | 'paragraph' | 'link' | 'bar'
-  ) => {
+  // Text Formatting
+  const applyTextFormat = (format: string) => {
     const textarea = textareaRef.current;
     if (!textarea) return;
-
     const start = textarea.selectionStart;
     const end = textarea.selectionEnd;
     const selectedText = formData.description.substring(start, end);
     let newText = formData.description;
+    let insertion = '';
 
-    if (format === 'paragraph') {
-      newText = `${newText.substring(0, start)}\n\n${newText.substring(end)}`;
-    } else if (format === 'link') {
-      if (!linkUrl) {
-        alert('Please enter a valid URL for the link.');
-        return;
-      }
-      if (!/^https?:\/\/[^\s/$.?#].[^\s]*$/.test(linkUrl)) {
-        alert('Please enter a valid URL starting with http:// or https://');
-        return;
-      }
-      if (selectedText) {
-        newText = `${newText.substring(0, start)}[link href="${linkUrl}"]${selectedText}[/link]${newText.substring(end)}`;
-      } else {
-        newText = `${newText.substring(0, start)}[link href="${linkUrl}"]Click here[/link]${newText.substring(end)}`;
-        textarea.selectionStart = start + 13 + linkUrl.length;
-        textarea.selectionEnd = start + 13 + linkUrl.length + 10;
-      }
+    if (format === 'link') {
+      if (!linkUrl) return alert('Enter URL first');
+      insertion = `[link href="${linkUrl}"]${selectedText || 'Link'}[/link]`;
       setLinkUrl('');
     } else if (format === 'bar') {
-      newText = `${newText.substring(0, start)}[bar/]${newText.substring(end)}`;
-      textarea.selectionStart = start + 6;
-      textarea.selectionEnd = start + 6;
-    } else if (format.startsWith('color=') || format.startsWith('size=')) {
-      if (selectedText) {
-        newText = `${newText.substring(0, start)}[${format}]${selectedText}[/${format.split('=')[0]}]${newText.substring(end)}`;
-      } else {
-        newText = `${newText.substring(0, start)}[${format}][/${format.split('=')[0]}]${newText.substring(end)}`;
-        textarea.selectionStart = start + format.length + 2;
-        textarea.selectionEnd = start + format.length + 2;
-      }
+      insertion = `[bar/]`;
+    } else if (format.includes('=')) {
+      const tag = format.split('=')[0];
+      insertion = `[${format}]${selectedText}[/${tag}]`;
     } else {
-      if (selectedText) {
-        newText = `${newText.substring(0, start)}[${format}]${selectedText}[/${format}]${newText.substring(end)}`;
-      } else {
-        newText = `${newText.substring(0, start)}[${format}][/${format}]${newText.substring(end)}`;
-        textarea.selectionStart = start + format.length + 2;
-        textarea.selectionEnd = start + format.length + 2;
-      }
+      insertion = `[${format}]${selectedText}[/${format}]`;
     }
-
+    
+    newText = formData.description.substring(0, start) + insertion + formData.description.substring(end);
     setFormData((prev) => ({ ...prev, description: newText }));
-    textarea.focus();
   };
 
-  const handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0] || null;
-    if (file) {
-      const cropped = await cropAndResizeImage(file, 500);
-      setImageFile(cropped);
-      setImagePreview(URL.createObjectURL(cropped));
-    }
-  };
-
-  const handleDownloadFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0] || null;
-    if (file) {
-      if (!/\.(zip|exe)$/i.test(file.name)) {
-        alert('Only .zip or .exe files are allowed!');
-        return;
-      }
-      const sizeMB = (file.size / (1024 * 1024)).toFixed(2) + ' MB';
-      setDownloadFile(file);
-      setFormData((prev) => ({ ...prev, size: sizeMB }));
-    }
-  };
-
-  const handleScreenshotsChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files ? Array.from(e.target.files) : [];
-    if (files.length) {
-      const resized = await Promise.all(files.map((f) => resizeImage(f, 800)));
-      setScreenshotFiles((prev) => [...prev, ...resized]);
-      setScreenshotPreviews((prev) => [...prev, ...resized.map((f) => URL.createObjectURL(f))]);
-    }
-  };
-
-  const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => e.preventDefault();
-  const handleDrop = async (e: React.DragEvent<HTMLDivElement>) => {
+  // Update Logic
+  const handleUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
-    const files = Array.from(e.dataTransfer.files).filter((f) => f.type.startsWith('image/'));
-    if (files.length) {
-      const resized = await Promise.all(files.map((f) => resizeImage(f, 800)));
-      setScreenshotFiles((prev) => [...prev, ...resized]);
-      setScreenshotPreviews((prev) => [...prev, ...resized.map((f) => URL.createObjectURL(f))]);
-    }
-  };
-
-  const handleRemoveExistingScreenshot = (index: number) => {
-    setExistingScreenshots((prev) => prev.filter((_, i) => i !== index));
-  };
-
-  const handleRemoveNewScreenshot = (index: number) => {
-    setScreenshotFiles((prev) => prev.filter((_, i) => i !== index));
-    setScreenshotPreviews((prev) => prev.filter((_, i) => i !== index));
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!formData.title || !formData.description || !formData.image) {
-      alert('Please fill required fields: Title, Description, and Image.');
-      return;
-    }
-    if (!validateDescription(formData.description)) {
-      alert('Unbalanced formatting tags in description. Please check [center], [underline], [bold], [size], [color], [link], and [bar/] tags.');
-      return;
-    }
+    if (!validateDescription(formData.description)) return alert('Description tags invalid');
+    
     setIsSubmitting(true);
-    setProgress(5);
-    setUploadMessage('Preparing updates...');
+    setProgress(10);
 
     try {
-      const bucketId = process.env.NEXT_PUBLIC_STORAGE_BUCKET;
-      if (!bucketId) throw new Error('Missing NEXT_PUBLIC_STORAGE_BUCKET env var.');
+        const bucketId = process.env.NEXT_PUBLIC_STORAGE_BUCKET;
+        if (!bucketId) throw new Error("Storage Bucket Missing");
 
-      let finalImageUrl = formData.image;
-      let finalDownloadUrl = formData.downloadUrl;
-      const finalScreenshots: string[] = [...existingScreenshots];
+        let finalImageUrl = formData.image;
+        let finalDownloadUrl = formData.downloadUrl;
 
-      if (imageFile) {
-        setUploadMessage('Uploading main image...');
-        setProgress(15);
-        finalImageUrl = await uploadToAppwrite(imageFile, bucketId);
-        setProgress(40);
-      }
-
-      if (downloadFile && formData.downloadType === 'file') {
-        setUploadMessage('Uploading download file...');
-        finalDownloadUrl = await uploadToAppwrite(downloadFile, bucketId);
-        setProgress(60);
-      } else if (formData.downloadType === 'link' && formData.downloadUrl) {
-        finalDownloadUrl = formData.downloadUrl;
-      }
-
-      if (screenshotFiles.length > 0) {
-        setUploadMessage('Uploading screenshots...');
-        const perFile = Math.floor((80 - 60) / screenshotFiles.length);
-        let cur = 60;
-        for (const file of screenshotFiles) {
-          const url = await uploadToAppwrite(file, bucketId);
-          finalScreenshots.push(url);
-          cur += perFile;
-          setProgress(Math.min(cur, 80));
+        // 1. Upload New Main Image if changed
+        if (newImageFile) {
+            finalImageUrl = await uploadToAppwrite(newImageFile, bucketId);
         }
+        setProgress(40);
+
+        // 2. Upload New Download File if changed
+        if (formData.downloadType === 'file' && formData.downloadFile) {
+            finalDownloadUrl = await uploadToAppwrite(formData.downloadFile, bucketId);
+        }
+        setProgress(60);
+
+        // 3. Upload New Screenshots
+        const newScreenshotUrls = [];
+        for (const file of newScreenshots) {
+            const url = await uploadToAppwrite(file, bucketId);
+            newScreenshotUrls.push(url);
+        }
+        
+        // Combine existing (that weren't deleted) + new
+        const finalScreenshots = [...formData.screenshots, ...newScreenshotUrls];
         setProgress(80);
-      }
 
-      const htmlDescription = convertToHtml(formData.description);
+        // 4. Update Firestore
+        const docRef = doc(db, 'Windows-tools', id);
+        await updateDoc(docRef, {
+            ...formData,
+            image: finalImageUrl,
+            downloadUrl: finalDownloadUrl,
+            screenshots: finalScreenshots,
+            price: formData.priceType === 'Free' ? 0 : Number(formData.price),
+            updatedAt: serverTimestamp()
+        });
 
-      const payload = {
-        title: formData.title,
-        description: htmlDescription,
-        image: finalImageUrl,
-        downloadUrl: finalDownloadUrl,
-        downloads: formData.downloads,
-        priceType: formData.priceType,
-        price: formData.priceType === 'Paid' ? formData.price ?? 0 : 0,
-        os: formData.os,
-        architecture: formData.architecture,
-        date: formData.date,
-        rating: formData.rating,
-        security: formData.security,
-        screenshots: finalScreenshots,
-        size: formData.size,
-        downloadType: formData.downloadType,
-        updatedAt: serverTimestamp(),
-      };
+        setProgress(100);
+        alert('Tool Updated Successfully');
+        router.push('/windows-tools');
 
-      setUploadMessage('Saving to Firestore...');
-      setProgress(90);
-      const docRef = doc(db, 'Windows-tools', id);
-      await updateDoc(docRef, payload);
-
-      setProgress(100);
-      setUploadMessage('Done!');
-      setTimeout(() => router.push(`/windows-tools/${formData.id}`), 600);
     } catch (err) {
-      console.error('Update failed', err);
-      alert('Update failed. Check console for details.');
+        console.error(err);
+        alert('Update Failed');
     } finally {
-      setIsSubmitting(false);
-      setProgress(0);
-      setUploadMessage(null);
+        setIsSubmitting(false);
     }
   };
 
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-black">
-        <div className="text-gray-300 text-center p-6">
-          <Loader2 className="h-8 w-8 animate-spin mx-auto mb-3" />
-          <div>Loading tool data...</div>
+  // Styles
+  const InputWrapper = ({ label, icon: Icon, children }: any) => (
+    <div className="relative group">
+      <label className="block text-[10px] uppercase font-bold text-gray-500 mb-1 tracking-widest">{label}</label>
+      <div className="relative">
+        <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 group-focus-within:text-red-500 transition-colors">
+          <Icon size={16} />
         </div>
+        {children}
       </div>
-    );
-  }
+    </div>
+  );
+  const baseInputClass = "w-full pl-9 pr-4 py-2.5 bg-[#1a1a1a] border border-[#333] rounded-lg text-sm text-gray-200 focus:outline-none focus:border-red-600 focus:ring-1 focus:ring-red-600 transition-all appearance-none";
+
+  if (loading) return <div className="min-h-screen bg-[#090909] flex items-center justify-center text-white"><Loader2 className="animate-spin"/></div>;
 
   return (
-    <section
-      className="min-h-screen flex items-start justify-center py-12 px-4 sm:px-6 lg:px-8 bg-gradient-to-br from-black/80 to-red-900/50"
-    >
-      <div className="absolute inset-0 pointer-events-none">
-        <div className="absolute -top-40 -left-40 w-[420px] h-[420px] bg-red-600/12 blur-[160px] rounded-full animate-pulse" />
-        <div className="absolute bottom-0 right-0 w-[420px] h-[420px] bg-purple-600/10 blur-[200px] rounded-full" />
+    <div className="min-h-screen bg-[#090909] text-gray-100 font-sans selection:bg-red-500/30">
+      
+      {/* Top Bar */}
+      <div className="h-14 border-b border-[#222] bg-[#0f0f0f] flex items-center px-6 justify-between sticky top-0 z-50 backdrop-blur-md bg-opacity-80">
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 bg-gradient-to-br from-red-600 to-red-800 rounded-md flex items-center justify-center shadow-red-900/20 shadow-lg">
+            <Edit3 size={18} className="text-white" />
+          </div>
+          <span className="font-bold text-lg tracking-tight">Edit <span className="text-red-500">Tool</span></span>
+        </div>
+        <button disabled={isSubmitting} onClick={handleUpdate} className="px-5 py-2 bg-white text-black text-sm font-semibold rounded-full hover:bg-gray-200 transition flex items-center gap-2">
+          {isSubmitting ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+          Save Changes
+        </button>
       </div>
 
-      <div className="edit-container relative w-full max-w-3xl mt-8  bg-black/40 backdrop-blur-md rounded-2xl shadow-2xl border border-red-800/20">
-        <h2 className="text-3xl md:text-4xl font-extrabold text-red-500 text-center mb-6 tracking-wide">Edit Tool</h2>
+      <div className="max-w-5xl mx-auto p-6 md:p-10" ref={containerRef}>
+        
+        <form onSubmit={handleUpdate} className="space-y-8">
+          
+          {/* 1. Header Details */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="md:col-span-2 space-y-4">
+               <InputWrapper label="Application Name" icon={Tag}>
+                 <input name="title" value={formData.title} onChange={handleChange} className={baseInputClass} />
+               </InputWrapper>
+               
+               <div className="grid grid-cols-2 gap-4">
+                 <InputWrapper label="OS" icon={Monitor}>
+                    <select name="os" value={formData.os} onChange={handleChange} className={baseInputClass}>
+                        <option value="">Select OS...</option>
+                        <optgroup label="Windows">
+                            <option value="Windows 11">Windows 11</option>
+                            <option value="Windows 10">Windows 10</option>
+                            <option value="Windows 7">Windows 7</option>
+                        </optgroup>
+                        <optgroup label="Other">
+                            <option value="Linux">Linux</option>
+                            <option value="Android">Android</option>
+                        </optgroup>
+                    </select>
+                 </InputWrapper>
+                 <InputWrapper label="Architecture" icon={Cpu}>
+                    <select name="architecture" value={formData.architecture} onChange={handleChange} className={baseInputClass}>
+                      <option value="">Select Arch...</option>
+                      <option value="64 bit (x64)">64 bit</option>
+                      <option value="32 bit (x86)">32 bit</option>
+                      <option value="ARM64">ARM64</option>
+                    </select>
+                 </InputWrapper>
+               </div>
 
-        <form onSubmit={handleSubmit} className="space-y-6">
-          {isSubmitting && (
-            <div className="w-full bg-gray-700 rounded-full h-2.5 mb-2 overflow-hidden">
-              <div className="h-2.5 bg-red-600 rounded-full transition-all duration-300" style={{ width: `${progress}%` }} />
+               <div className="grid grid-cols-2 gap-4">
+                 <InputWrapper label="Rating" icon={Star}>
+                    <select name="rating" value={formData.rating} onChange={handleChange} className={baseInputClass}>
+                        <option value="5/5">5 Stars</option>
+                        <option value="4.5/5">4.5 Stars</option>
+                        <option value="4/5">4 Stars</option>
+                    </select>
+                 </InputWrapper>
+                 <InputWrapper label="Security" icon={Shield}>
+                    <select name="security" value={formData.security} onChange={handleChange} className={baseInputClass}>
+                        <option value="safe">Safe</option>
+                        <option value="medium">Medium</option>
+                        <option value="high">High</option>
+                    </select>
+                 </InputWrapper>
+               </div>
             </div>
-          )}
-          {uploadMessage && <p className="text-sm text-gray-300 mb-2">{uploadMessage} {isSubmitting && <Loader2 className="inline-block h-4 w-4 animate-spin ml-2" />}</p>}
-
-          <div className="fade-item">
-            <label className="block text-sm text-gray-300 mb-1">Tool Title</label>
-            <div className="relative">
-              <Tag className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-              <input
-                type="text"
-                name="title"
-                value={formData.title}
-                onChange={handleChange}
-                placeholder="Enter Tool Title"
-                className="w-full pl-10 pr-4 py-3 bg-black/30 border border-red-800/40 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-red-600 transition-all duration-200 text-lg"
-                disabled={isSubmitting}
-              />
-            </div>
-          </div>
-
-          <div className="fade-item">
-            <label className="block text-sm text-gray-300 mb-1">Description</label>
-            <div className="flex flex-wrap gap-2 mb-2">
-              <button type="button" onClick={() => applyTextFormat('center')} className="px-2 py-1 bg-gray-700 text-white rounded hover:bg-gray-600" title="Center Text">Center</button>
-              <button type="button" onClick={() => applyTextFormat('underline')} className="px-2 py-1 bg-gray-700 text-white rounded hover:bg-gray-600" title="Underline Text">Underline</button>
-              <button type="button" onClick={() => applyTextFormat('bold')} className="px-2 py-1 bg-gray-700 text-white rounded hover:bg-gray-600 flex items-center gap-1" title="Bold Text"><Bold className="h-4 w-4" />Bold</button>
-              <button type="button" onClick={() => applyTextFormat('size=sm')} className="px-2 py-1 bg-gray-700 text-white rounded hover:bg-gray-600 flex items-center gap-1" title="Small Text"><Type className="h-4 w-4" />Small</button>
-              <button type="button" onClick={() => applyTextFormat('size=md')} className="px-2 py-1 bg-gray-700 text-white rounded hover:bg-gray-600 flex items-center gap-1" title="Medium Text"><Type className="h-4 w-4" />Medium</button>
-              <button type="button" onClick={() => applyTextFormat('size=lg')} className="px-2 py-1 bg-gray-700 text-white rounded hover:bg-gray-600 flex items-center gap-1" title="Large Text"><Type className="h-4 w-4" />Large</button>
-              <button type="button" onClick={() => applyTextFormat('color=red')} className="px-2 py-1 bg-red-600 text-white rounded hover:bg-red-700" title="Red Text">Red</button>
-              <button type="button" onClick={() => applyTextFormat('color=green')} className="px-2 py-1 bg-green-600 text-white rounded hover:bg-green-700" title="Green Text">Green</button>
-              <button type="button" onClick={() => applyTextFormat('color=blue')} className="px-2 py-1 bg-blue-600 text-white rounded hover:bg-blue-700" title="Blue Text">Blue</button>
-              <button type="button" onClick={() => applyTextFormat('paragraph')} className="px-2 py-1 bg-gray-700 text-white rounded hover:bg-gray-600" title="Add Paragraph Break">Paragraph</button>
-              <button type="button" onClick={() => applyTextFormat('bar')} className="px-2 py-1 bg-gray-700 text-white rounded hover:bg-gray-600 flex items-center gap-1" title="Add Horizontal Rule"><Minus className="h-4 w-4" />HR</button>
-              <div className="flex items-center gap-2">
-                <input
-                  type="text"
-                  value={linkUrl}
-                  onChange={handleDescriptionLinkUrlChange}
-                  placeholder="Enter link URL"
-                  className="px-2 py-1 bg-black/30 border border-red-800/40 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-red-600"
-                  disabled={isSubmitting}
-                />
-                <button type="button" onClick={() => applyTextFormat('link')} className="px-2 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 flex items-center gap-1" title="Add Link"><Link className="h-4 w-4" />Add Link</button>
-              </div>
-            </div>
-            <textarea
-              ref={textareaRef}
-              name="description"
-              value={formData.description}
-              onChange={handleChange}
-              placeholder="Enter description with [center], [underline], [bold], [size=sm], [size=md], [size=lg], [color=red], [color=green], [color=blue], [link href='URL']text[/link], [bar/] tags"
-              className="w-full h-36 p-4 bg-black/30 border border-red-800/40 rounded-lg text-gray-100 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-red-600 resize-y transition-all duration-200 text-base leading-relaxed"
-              disabled={isSubmitting}
-            />
-            <div className="mt-4">
-              <h3 className="text-sm text-gray-300 mb-2">Preview</h3>
-              <div className="text-white prose prose-invert max-w-none" dangerouslySetInnerHTML={{ __html: convertToHtml(formData.description) }} />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="fade-item">
-              <label className="block text-sm text-gray-300 mb-1">Tool Image</label>
-              <input
-                type="file"
-                accept="image/*"
-                onChange={handleImageChange}
-                disabled={isSubmitting}
-                className="w-full text-white file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-red-600 file:text-white hover:file:bg-red-700"
-              />
-              {imagePreview && (
-                <div className="mt-3">
-                  <img src={imagePreview} alt="Preview" className="h-40 w-full object-cover rounded-lg border border-gray-600 shadow-md" />
+            
+            {/* Main Image Tile (Edit Mode) */}
+            <div className="relative group aspect-square bg-[#1a1a1a] border-2 border-dashed border-[#333] rounded-xl flex flex-col items-center justify-center overflow-hidden hover:border-red-500/50 transition cursor-pointer">
+              <input type="file" onChange={handleMainImageChange} className="absolute inset-0 opacity-0 cursor-pointer z-10" />
+              {newImageFile ? (
+                <img src={URL.createObjectURL(newImageFile)} className="w-full h-full object-cover" />
+              ) : formData.image ? (
+                <img src={formData.image} className="w-full h-full object-cover opacity-80 group-hover:opacity-60 transition" />
+              ) : (
+                <div className="flex flex-col items-center text-gray-500">
+                   <ImageIcon />
+                   <span className="text-xs">No Image</span>
                 </div>
               )}
-            </div>
-
-            <div className="fade-item">
-              <label className="block text-sm text-gray-300 mb-1">Download Type</label>
-              <select
-                name="downloadType"
-                value={formData.downloadType}
-                onChange={handleDownloadTypeChange}
-                disabled={isSubmitting}
-                className="w-full p-3 bg-black/30 border border-red-800/40 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-red-600 transition-all duration-200"
-              >
-                <option value="file">File</option>
-                <option value="link">Link</option>
-              </select>
-            </div>
-
-            {formData.downloadType === 'file' && (
-              <div className="fade-item">
-                <label className="block text-sm text-gray-300 mb-1">Upload File (.zip or .exe)</label>
-                <input
-                  type="file"
-                  accept=".zip,.exe"
-                  onChange={handleDownloadFileChange}
-                  disabled={isSubmitting}
-                  className="w-full text-white file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-red-600 file:text-white hover:file:bg-red-700"
-                />
-                {formData.size && <p className="text-sm text-gray-300 mt-1">Size: {formData.size}</p>}
-              </div>
-            )}
-            {formData.downloadType === 'link' && (
-              <div className="fade-item">
-                <label className="block text-sm text-gray-300 mb-1">Download URL</label>
-                <div className="relative">
-                  <Link className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                  <input
-                    type="text"
-                    name="downloadUrl"
-                    value={formData.downloadUrl || ''}
-                    onChange={handleDownloadUrlChange}
-                    placeholder="Enter download URL"
-                    className="w-full pl-10 pr-4 py-3 bg-black/30 border border-red-800/40 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-red-600 transition-all duration-200"
-                    disabled={isSubmitting}
-                  />
-                </div>
-              </div>
-            )}
-            {formData.downloadType === 'link' && (
-              <div className="fade-item">
-                <label className="block text-sm text-gray-300 mb-1">Size (MB)</label>
-                <div className="relative">
-                  <Tag className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                  <input
-                    type="text"
-                    name="size"
-                    value={formData.size}
-                    onChange={handleSizeChange}
-                    placeholder="e.g., 10.5 MB"
-                    className="w-full pl-10 pr-4 py-3 bg-black/30 border border-red-800/40 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-red-600 transition-all duration-200"
-                    disabled={isSubmitting}
-                  />
-                </div>
-              </div>
-            )}
-
-            <div className="fade-item">
-              <label className="block text-sm text-gray-300 mb-1">Price Type</label>
-              <select
-                name="priceType"
-                value={formData.priceType}
-                onChange={handleChange}
-                disabled={isSubmitting}
-                className="w-full p-3 bg-black/30 border border-red-800/40 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-red-600 transition-all duration-200"
-              >
-                <option value="Free">Free</option>
-                <option value="Paid">Paid</option>
-              </select>
-            </div>
-
-            {formData.priceType === 'Paid' && (
-              <div className="fade-item">
-                <label className="block text-sm text-gray-300 mb-1">Price (₦)</label>
-                <div className="relative">
-                  <Tag className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                  <input
-                    type="number"
-                    name="price"
-                    value={formData.price ?? ''}
-                    onChange={(e) => setFormData((prev) => ({ ...prev, price: Number(e.target.value) || null }))}
-                    placeholder="Enter price"
-                    className="w-full pl-10 pr-4 py-3 bg-black/30 border border-red-800/40 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-red-600 transition-all duration-200"
-                    disabled={isSubmitting}
-                  />
-                </div>
-              </div>
-            )}
-
-            <div className="fade-item">
-              <label className="block text-sm text-gray-300 mb-1">Operating System</label>
-              <div className="relative">
-                <Monitor className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                <input
-                  type="text"
-                  name="os"
-                  value={formData.os}
-                  onChange={handleChange}
-                  placeholder="e.g., Windows 7/8/10/11"
-                  className="w-full pl-10 pr-4 py-3 bg-black/30 border border-red-800/40 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-red-600 transition-all duration-200"
-                  disabled={isSubmitting}
-                />
-              </div>
-            </div>
-
-            <div className="fade-item">
-              <label className="block text-sm text-gray-300 mb-1">Architecture</label>
-              <div className="relative">
-                <Cpu className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                <select
-                  name="architecture"
-                  value={formData.architecture}
-                  onChange={handleChange}
-                  disabled={isSubmitting}
-                  className="w-full pl-10 pr-4 py-3 bg-black/30 border border-red-800/40 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-red-600 transition-all duration-200"
-                >
-                  <option value="">Select architecture</option>
-                  <option value="32 bit">32 bit</option>
-                  <option value="64 bit">64 bit</option>
-                  <option value="32 bit / 64 bit">32 bit / 64 bit</option>
-                  <option value="arm">ARM</option>
-                </select>
-              </div>
-            </div>
-
-            <div className="fade-item">
-              <label className="block text-sm text-gray-300 mb-1">Rating</label>
-              <div className="relative">
-                <Star className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                <select
-                  name="rating"
-                  value={formData.rating}
-                  onChange={handleChange}
-                  disabled={isSubmitting}
-                  className="w-full pl-10 pr-4 py-3 bg-black/30 border border-red-800/40 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-red-600 transition-all duration-200"
-                >
-                  <option value="">Select rating</option>
-                  <option value="0.5/5">0.5/5</option>
-                  <option value="1.5/5">1.5/5</option>
-                  <option value="2.5/5">2.5/5</option>
-                  <option value="3.5/5">3.5/5</option>
-                  <option value="4.5/5">4.5/5</option>
-                </select>
-              </div>
-            </div>
-
-            <div className="fade-item">
-              <label className="block text-sm text-gray-300 mb-1">Security</label>
-              <div className="relative">
-                <Shield className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                <select
-                  name="security"
-                  value={formData.security}
-                  onChange={handleChange}
-                  disabled={isSubmitting}
-                  className="w-full pl-10 pr-4 py-3 bg-black/30 border border-red-800/40 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-red-600 transition-all duration-200"
-                >
-                  <option value="">Select security level</option>
-                  <option value="safe">Safe</option>
-                  <option value="medium">Medium Risk</option>
-                  <option value="high">High Risk</option>
-                </select>
+              <div className="absolute bottom-2 left-0 right-0 text-center pointer-events-none">
+                 <span className="bg-black/70 px-2 py-1 text-[10px] rounded text-white">Click to Replace</span>
               </div>
             </div>
           </div>
 
-          <div className="fade-item">
-            <label className="block text-sm text-gray-300 mb-2">Screenshots</label>
-            <div
-              ref={dropRef}
-              onDragOver={handleDragOver}
-              onDrop={handleDrop}
-              className="border-2 border-dashed border-red-800/40 p-4 rounded-lg bg-black/20 hover:bg-black/30 transition-colors duration-200"
-            >
-              <div className="flex items-center justify-between gap-4">
-                <div className="flex items-center gap-3 text-gray-300">
-                  <Upload className="h-5 w-5" />
-                  <div>
-                    <div className="text-sm">Drag & drop images here or click to upload</div>
-                    <div className="text-xs text-gray-400">PNG/JPG, resized automatically</div>
-                  </div>
+          {/* 2. MS Word Style Editor */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+                <label className="text-[10px] uppercase font-bold text-gray-500 tracking-widest">Description</label>
+                <div className="flex bg-[#1a1a1a] p-1 rounded-lg border border-[#333]">
+                  <button type="button" onClick={() => setEditorMode('write')} className={`px-3 py-1 text-xs font-medium rounded-md flex items-center gap-1.5 transition ${editorMode === 'write' ? 'bg-[#333] text-white' : 'text-gray-500'}`}><Edit3 size={12}/> Edit</button>
+                  <button type="button" onClick={() => setEditorMode('review')} className={`px-3 py-1 text-xs font-medium rounded-md flex items-center gap-1.5 transition ${editorMode === 'review' ? 'bg-[#333] text-white' : 'text-gray-500'}`}><Eye size={12}/> Preview</button>
                 </div>
-                <input
-                  type="file"
-                  accept="image/*"
-                  multiple
-                  onChange={handleScreenshotsChange}
-                  disabled={isSubmitting}
-                  className="hidden"
-                  id="screenshot-input"
-                />
-                <label htmlFor="screenshot-input" className="px-3 py-2 bg-red-600 text-white rounded-lg cursor-pointer text-sm">
-                  Browse
+            </div>
+
+            <div className="border border-[#333] rounded-xl overflow-hidden bg-[#111] shadow-2xl flex flex-col min-h-[400px]">
+              {/* Ribbon */}
+              <div className="bg-[#1a1a1a] border-b border-[#333] p-2 flex items-center gap-1 flex-wrap select-none">
+                 <div className="flex items-center gap-1 pr-2 border-r border-[#333] mr-2">
+                    <button type="button" onClick={() => applyTextFormat('bold')} className="p-1.5 text-gray-400 hover:bg-[#2a2a2a] hover:text-white rounded"><Bold size={16}/></button>
+                    <button type="button" onClick={() => applyTextFormat('underline')} className="p-1.5 text-gray-400 hover:bg-[#2a2a2a] hover:text-white rounded"><Underline size={16}/></button>
+                    <button type="button" onClick={() => applyTextFormat('size=lg')} className="p-1.5 text-gray-400 hover:bg-[#2a2a2a] hover:text-white rounded"><Type size={16}/></button>
+                 </div>
+                 <div className="flex items-center gap-2 px-2">
+                    <button type="button" onClick={() => applyTextFormat('color=red')} className="w-4 h-4 rounded-full bg-red-500"></button>
+                    <button type="button" onClick={() => applyTextFormat('color=blue')} className="w-4 h-4 rounded-full bg-blue-500"></button>
+                 </div>
+                 <div className="flex items-center gap-2">
+                    <input type="text" value={linkUrl} onChange={e => setLinkUrl(e.target.value)} placeholder="https://..." className="bg-[#0d0d0d] border border-[#333] rounded px-2 py-1 text-xs w-24 text-white focus:outline-none"/>
+                    <button type="button" onClick={() => applyTextFormat('link')} className="text-[10px] text-blue-400">LINK</button>
+                    <button type="button" onClick={() => applyTextFormat('bar')} className="p-1.5 text-gray-400 hover:bg-[#2a2a2a] rounded"><Minus size={16}/></button>
+                 </div>
+              </div>
+
+              {/* Editor */}
+              <div className="flex-1 bg-[#151515] p-6 overflow-y-auto">
+                 <div className="max-w-3xl mx-auto min-h-[350px] bg-[#0a0a0a] border border-[#222] p-8">
+                    {editorMode === 'write' ? (
+                        <textarea ref={textareaRef} name="description" value={formData.description} onChange={handleChange} className="w-full h-full bg-transparent resize-none focus:outline-none text-gray-300 font-mono text-sm leading-relaxed" />
+                    ) : (
+                        <div className="prose prose-invert prose-sm max-w-none" dangerouslySetInnerHTML={{ __html: convertToHtml(formData.description) }} />
+                    )}
+                 </div>
+              </div>
+            </div>
+          </div>
+
+          {/* 3. Visual Assets (Edit Logic) */}
+          <div className="bg-[#1a1a1a] border border-[#333] rounded-xl p-6">
+            <h3 className="text-sm font-bold text-white mb-4 flex items-center gap-2"><LayoutGrid size={16} className="text-yellow-500"/> Visual Assets</h3>
+            
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                {/* A. Dropzone for NEW images */}
+                <label className="aspect-video border-2 border-dashed border-[#333] rounded-lg flex flex-col items-center justify-center bg-[#111] hover:bg-[#222] cursor-pointer">
+                    <input type="file" multiple accept="image/*" onChange={handleNewScreenshots} className="hidden" />
+                    <Plus className="text-gray-500 mb-2" />
+                    <span className="text-[10px] text-gray-500">Add New</span>
                 </label>
-              </div>
-            </div>
 
-            <div className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-3">
-              {existingScreenshots.map((url, idx) => (
-                <div key={`existing-${idx}`} className="relative group">
-                  <img src={url} alt={`screenshot-${idx}`} className="h-28 w-full object-cover rounded-lg border border-gray-600 shadow-sm" />
-                  <button
-                    type="button"
-                    onClick={() => handleRemoveExistingScreenshot(idx)}
-                    className="absolute top-2 right-2 bg-red-600 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
-                    disabled={isSubmitting}
-                  >
-                    <Minus className="h-4 w-4" />
-                  </button>
-                </div>
-              ))}
-              {screenshotPreviews.map((preview, idx) => (
-                <div key={`new-${idx}`} className="relative group">
-                  <img src={preview} alt={`new-${idx}`} className="h-28 w-full object-cover rounded-lg border border-gray-600 shadow-sm" />
-                  <button
-                    type="button"
-                    onClick={() => handleRemoveNewScreenshot(idx)}
-                    className="absolute top-2 right-2 bg-red-600 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
-                    disabled={isSubmitting}
-                  >
-                    <Minus className="h-4 w-4" />
-                  </button>
-                </div>
-              ))}
-            </div>
+                {/* B. Existing Database Screenshots */}
+                {formData.screenshots.map((url, idx) => (
+                    <div key={`exist-${idx}`} className="relative group aspect-video bg-black rounded-lg overflow-hidden border border-[#333]">
+                        <img src={url} className="w-full h-full object-cover opacity-70" />
+                        <span className="absolute bottom-1 left-1 bg-blue-600 text-[9px] px-1 rounded text-white">Saved</span>
+                        {/* FIX: Use className instead of text-white */}
+                        <button type="button" onClick={() => removeExistingScreenshot(idx)} className="absolute top-1 right-1 bg-red-600 p-1 rounded-full opacity-0 group-hover:opacity-100 transition"><X size={12} className="text-white"/></button>
+                    </div>
+                ))}
 
-            <div className="mt-3 flex gap-2">
-              <button
-                type="button"
-                onClick={() => { setScreenshotFiles([]); setScreenshotPreviews([]); }}
-                className="px-3 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-600 transition"
-                disabled={isSubmitting || (screenshotFiles.length === 0 && screenshotPreviews.length === 0)}
-              >
-                Clear New Screenshots
-              </button>
-              <button
-                type="button"
-                onClick={() => setExistingScreenshots([])}
-                className="px-3 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition"
-                disabled={isSubmitting || existingScreenshots.length === 0}
-              >
-                Remove All Existing
-              </button>
+                {/* C. New Pending Screenshots */}
+                {newScreenshots.map((file, idx) => (
+                    <div key={`new-${idx}`} className="relative group aspect-video bg-black rounded-lg overflow-hidden border border-green-500/30">
+                        <img src={URL.createObjectURL(file)} className="w-full h-full object-cover" />
+                        <span className="absolute bottom-1 left-1 bg-green-600 text-[9px] px-1 rounded text-white">New</span>
+                        {/* FIX: Use className instead of text-white */}
+                        <button type="button" onClick={() => removeNewScreenshot(idx)} className="absolute top-1 right-1 bg-red-600 p-1 rounded-full opacity-0 group-hover:opacity-100 transition"><X size={12} className="text-white"/></button>
+                    </div>
+                ))}
             </div>
           </div>
 
-          <div className="fade-item">
-            <button
-              type="submit"
-              disabled={isSubmitting || !formData.title || !formData.description || !formData.image || (formData.downloadType === 'file' && !downloadFile) || (formData.downloadType === 'link' && !formData.downloadUrl)}
-              className="w-full py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 flex items-center justify-center gap-2 font-semibold shadow-md hover:shadow-lg transition-all duration-200 disabled:bg-gray-500 disabled:cursor-not-allowed text-lg"
-            >
-              {isSubmitting && <Loader2 className="h-5 w-5 animate-spin" />}
-              {isSubmitting ? 'Saving...' : 'Save Changes'}
-            </button>
+          {/* 4. Files */}
+          <div className="bg-[#1a1a1a] p-6 rounded-xl border border-[#333]">
+             <h3 className="text-sm font-bold text-white mb-4 flex items-center gap-2"><FileArchive size={16} className="text-red-500"/> Source File</h3>
+             <div className="flex gap-2 mb-4">
+                <button type="button" onClick={() => setFormData(p => ({...p, downloadType: 'file'}))} className={`flex-1 py-2 text-xs font-bold rounded border ${formData.downloadType === 'file' ? 'bg-red-600 border-red-600' : 'border-[#333] text-gray-500'}`}>File</button>
+                <button type="button" onClick={() => setFormData(p => ({...p, downloadType: 'link'}))} className={`flex-1 py-2 text-xs font-bold rounded border ${formData.downloadType === 'link' ? 'bg-red-600 border-red-600' : 'border-[#333] text-gray-500'}`}>Link</button>
+             </div>
+             
+             {formData.downloadType === 'file' ? (
+                 <div className="space-y-2">
+                     <p className="text-xs text-gray-400">Current: {formData.size || 'Unknown'}</p>
+                     <input type="file" onChange={(e) => {
+                         if(e.target.files?.[0]) {
+                            setFormData(p => ({...p, downloadFile: e.target.files![0], size: (e.target.files![0].size / (1024*1024)).toFixed(2) + ' MB' }))
+                         }
+                     }} className="block w-full text-xs text-gray-500 file:bg-[#333] file:text-white file:border-0 file:rounded-full file:px-4 file:py-2"/>
+                 </div>
+             ) : (
+                 <div className="space-y-4">
+                     <InputWrapper label="Download URL" icon={LinkIcon}>
+                        <input name="downloadUrl" value={formData.downloadUrl || ''} onChange={handleChange} className={baseInputClass} />
+                     </InputWrapper>
+                     <InputWrapper label="Size" icon={HardDrive}>
+                        <input name="size" value={formData.size} onChange={handleChange} className={baseInputClass} />
+                     </InputWrapper>
+                 </div>
+             )}
           </div>
+
+          {/* 5. Pricing */}
+          <div className="bg-[#1a1a1a] p-6 rounded-xl border border-[#333]">
+             <h3 className="text-sm font-bold text-white mb-4 flex items-center gap-2"><DollarSign size={16} className="text-green-500"/> Pricing</h3>
+             <select name="priceType" value={formData.priceType} onChange={handleChange} className={`${baseInputClass} mb-3`}>
+                 <option value="Free">Free</option>
+                 <option value="Paid">Paid</option>
+             </select>
+             {formData.priceType === 'Paid' && <input type="number" name="price" value={formData.price || ''} onChange={handleChange} placeholder="NGN" className={baseInputClass} />}
+          </div>
+
         </form>
       </div>
-    </section>
+    </div>
   );
 };
 

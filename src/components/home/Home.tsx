@@ -23,7 +23,7 @@ const Home: React.FC = () => {
   }, []);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-black/80 via-black/50 to-red-900/50">
+    <div className="min-h-screen  bg-gradient-to-br from-black/80 via-black/50 to-red-900/50">
 
 
 

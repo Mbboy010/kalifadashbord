@@ -1,93 +1,135 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
-import { Download, Upload, Server, FilePlus, Youtube } from 'lucide-react';
+import { 
+  Download, 
+  Upload, 
+  Server, 
+  FilePlus, 
+  Youtube, 
+  Zap, 
+  ArrowRight, 
+  LayoutGrid
+} from 'lucide-react';
 import { gsap } from 'gsap';
 import { useRouter } from 'next/navigation';
 
 const ButtonList: React.FC = () => {
-  const buttonRefs = useRef<(HTMLButtonElement | null)[]>([]);
+  const containerRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
 
+  // Staggered Entrance Animation
   useEffect(() => {
-    buttonRefs.current.forEach((ref, index) => {
-      if (ref) {
-        gsap.fromTo(
-          ref,
-          { opacity: 0, y: 50 },
-          { opacity: 1, y: 0, duration: 0.6, ease: 'power2.out', delay: index * 0.2 }
-        );
-      }
-    });
+    const ctx = gsap.context(() => {
+      gsap.fromTo(
+        '.action-card',
+        { y: 30, opacity: 0, scale: 0.95 },
+        { 
+          y: 0, 
+          opacity: 1, 
+          scale: 1, 
+          duration: 0.5, 
+          stagger: 0.05, 
+          ease: 'back.out(1.7)' 
+        }
+      );
+    }, containerRef);
+
+    return () => ctx.revert();
   }, []);
 
-  const buttons = [
+  const actions = [
     {
-      label: 'Download Files List',
-      icon: Download,
-      onClick: () => router.push('/downloads'),
+      category: 'Downloads',
+      items: [
+        { label: 'Manage Files', sub: 'View all downloads', icon: Download, path: '/downloads' },
+        { label: 'New Upload', sub: 'Add file to server', icon: Upload, path: '/upload-download' },
+      ]
     },
     {
-      label: 'Upload Download',
-      icon: Upload,
-      onClick: () => router.push('/upload-download'),
+      category: 'Windows Tools',
+      items: [
+        { label: 'Tool Inventory', sub: 'Manage .exe/.zip', icon: LayoutGrid, path: '/windows-files' },
+        { label: 'Deploy Tool', sub: 'Upload new utility', icon: Upload, path: '/window-upload' },
+      ]
     },
     {
-      label: 'Windows Files List',
-      icon: Download,
-      onClick: () => router.push('/windows-files'),
+      category: 'Systems',
+      items: [
+        { label: 'System Logs', sub: 'Monitor status', icon: Server, path: '/systems' },
+        { label: 'Add Node', sub: 'Register system', icon: FilePlus, path: '/upload-system' },
+      ]
     },
     {
-      label: 'Upload Windows tool',
-      icon: Upload,
-      onClick: () => router.push('/window-upload'),
-    },
-    {
-      label: 'System List',
-      icon: Server,
-      onClick: () => router.push('/systems'),
-    },
-    {
-      label: 'Upload System',
-      icon: FilePlus,
-      onClick: () => router.push('/upload-system'),
-    },
-    {
-      label: 'YouTube Videos List',
-      icon: Youtube,
-      onClick: () => router.push('/youtube-videos'),
-    },
-    {
-      label: 'Upload to YouTube',
-      icon: Upload,
-      onClick: () => router.push('/upload-youtube'),
+      category: 'Media',
+      items: [
+        { label: 'Video Library', sub: 'YouTube content', icon: Youtube, path: '/youtube-videos' },
+        { label: 'Publish Video', sub: 'Link new content', icon: Upload, path: '/upload-youtube' },
+      ]
     },
   ];
 
   return (
-    <div className="py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-2xl mx-auto">
-        <h2 className="text-2xl font-bold text-red-500 mb-6 text-center">Quick Actions</h2>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          {buttons.map((button, index) => {
-            const Icon = button.icon;
-            return (
-              <button
-                key={index}
-                ref={(el) => {
-                  buttonRefs.current[index] = el;
-                }}
-                onClick={button.onClick}
-                className="w-full flex items-center justify-start gap-3 px-4 py-4 rounded-lg bg-black/40 text-white hover:bg-red-600 transition-all"
-              >
-                <Icon className="h-5 w-5 text-red-400" />
-                <span className="text-left">{button.label}</span>
-              </button>
-            );
-          })}
+    <section className="py-12 px-4 sm:px-6 lg:px-8 bg-transparent" ref={containerRef}>
+      <div className="max-w-5xl mx-auto">
+        
+        {/* Section Header */}
+        <div className="flex items-center gap-3 mb-8 justify-center md:justify-start">
+          <div className="p-2 bg-red-600/10 rounded-lg border border-red-600/20">
+            <Zap className="w-6 h-6 text-red-500" />
+          </div>
+          <h2 className="text-2xl font-bold text-white tracking-tight">Quick Actions</h2>
         </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          {actions.map((group, groupIdx) => (
+            <div key={groupIdx} className="space-y-4">
+              {/* Category Label */}
+              <h3 className="text-xs font-bold text-gray-500 uppercase tracking-widest pl-1">
+                {group.category}
+              </h3>
+              
+              {/* Buttons */}
+              <div className="space-y-3">
+                {group.items.map((btn, btnIdx) => {
+                  const Icon = btn.icon;
+                  return (
+                    <button
+                      key={btnIdx}
+                      onClick={() => router.push(btn.path)}
+                      className="action-card group w-full relative overflow-hidden p-4 bg-[#111] border border-[#222] hover:border-red-600/50 rounded-xl transition-all duration-300 hover:shadow-[0_0_20px_rgba(220,38,38,0.15)] text-left"
+                    >
+                      {/* Hover Gradient Background */}
+                      <div className="absolute inset-0 bg-gradient-to-r from-red-900/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                      
+                      <div className="relative z-10 flex items-center justify-between">
+                        <div className="flex items-center gap-4">
+                          <div className="p-2.5 rounded-lg bg-[#1a1a1a] border border-[#333] group-hover:border-red-500 group-hover:text-red-500 text-gray-400 transition-colors">
+                            <Icon className="w-5 h-5" />
+                          </div>
+                          <div>
+                            <span className="block text-sm font-semibold text-gray-200 group-hover:text-white transition-colors">
+                              {btn.label}
+                            </span>
+                            <span className="block text-xs text-gray-500 group-hover:text-gray-400">
+                              {btn.sub}
+                            </span>
+                          </div>
+                        </div>
+                        
+                        {/* Arrow Slide Animation */}
+                        <ArrowRight className="w-4 h-4 text-red-500 opacity-0 -translate-x-2 group-hover:opacity-100 group-hover:translate-x-0 transition-all duration-300" />
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+        </div>
+
       </div>
-    </div>
+    </section>
   );
 };
 

@@ -12,7 +12,6 @@ import {
   Search
 } from 'lucide-react';
 import { storage } from '@/server/appwrite';
-import { gsap } from 'gsap';
 import { db } from '@/server/firebaseApi';
 import { collection, getDocs, deleteDoc, doc, updateDoc, getDoc, query, orderBy } from 'firebase/firestore';
 
@@ -36,7 +35,6 @@ const ContentListPage: React.FC = () => {
   const [activeMenuId, setActiveMenuId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   
-  const listRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
 
   // --- Data Fetching ---
@@ -61,18 +59,6 @@ const ContentListPage: React.FC = () => {
     fetchData();
   }, []);
 
-  // --- Animations ---
-  useEffect(() => {
-    if (!isLoading && listRef.current) {
-      const items = listRef.current.children;
-      gsap.fromTo(
-        items,
-        { opacity: 0, y: 20, scale: 0.98 },
-        { opacity: 1, y: 0, scale: 1, stagger: 0.1, duration: 0.6, ease: 'power3.out' }
-      );
-    }
-  }, [contents, isLoading]);
-
   // --- Handlers ---
   const handleDelete = async (id: string) => {
     if (!confirm('Are you sure you want to delete this package? This cannot be undone.')) return;
@@ -84,7 +70,6 @@ const ContentListPage: React.FC = () => {
       if (docSnap.exists()) {
         const data = docSnap.data();
         if (data.appwriteFileId) {
-          // Hardcoded bucket ID from your previous code; consider moving to env vars
           await storage.deleteFile('688cce34002223f15e42', data.appwriteFileId).catch(console.error);
         }
         await deleteDoc(docRef);
@@ -176,7 +161,7 @@ const ContentListPage: React.FC = () => {
         </div>
 
         {/* Content Grid */}
-        <div ref={listRef} className="space-y-4">
+        <div className="space-y-4">
           {isLoading ? (
             // Skeletons
             Array.from({ length: 4 }).map((_, i) => (
@@ -187,10 +172,11 @@ const ContentListPage: React.FC = () => {
               No packages found.
             </div>
           ) : (
-            filteredContents.map((item) => (
+            filteredContents.map((item, index) => (
               <div
                 key={item.id}
-                className="group relative flex items-center justify-between p-5 bg-[#111] border border-[#222] rounded-xl hover:border-red-500/30 transition-all duration-300 hover:shadow-[0_4px_20px_rgba(0,0,0,0.5)] hover:bg-[#151515]"
+                className="group relative flex items-center justify-between p-5 bg-[#111] border border-[#222] rounded-xl hover:border-red-500/30 transition-all duration-300 hover:shadow-[0_4px_20px_rgba(0,0,0,0.5)] hover:bg-[#151515] animate-in slide-in-from-bottom-4 fade-in fill-mode-forwards"
+                style={{ animationDelay: `${index * 100}ms`, animationDuration: '0.5s' }}
               >
                 {/* Left: Icon & Info */}
                 <div className="flex items-center gap-5">

@@ -36,8 +36,10 @@ export default function RootLayout({
       <body className={`${geistSans.variable} ${geistMono.variable} bg-black text-gray-200  `}>
        <LoginComponent />
        <Navigation />
-
+         <div className="mt-7">
+           
         {children}
+         </div>
       
       <Footer />
       

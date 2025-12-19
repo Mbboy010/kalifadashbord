@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useRef } from 'react';
 import { 
   Minus, Tag, Monitor, Cpu, Shield, Star, Loader2, Link as LinkIcon, 
   Type, Bold, Image as ImageIcon, UploadCloud, X, FileArchive, DollarSign, 
@@ -357,7 +357,8 @@ const UploadToolPage: React.FC = () => {
     </div>
   );
 
-  const baseInputClass = "w-full pl-9 pr-4 py-3 bg-[#1a1a1a] border border-[#333] rounded-lg text-sm text-gray-200 focus:outline-none focus:border-red-600 focus:ring-1 focus:ring-red-600 transition-all appearance-none";
+  // FIX: Added text-base to prevent zoom on iOS
+  const baseInputClass = "w-full pl-9 pr-4 py-4 bg-[#1a1a1a] border border-[#333] rounded-lg text-base text-gray-200 focus:outline-none focus:border-red-600 focus:ring-1 focus:ring-red-600 transition-all appearance-none";
 
   return (
     <div className="min-h-screen bg-[#090909] text-gray-100 font-sans selection:bg-red-500/30 pb-20">
@@ -500,7 +501,7 @@ const UploadToolPage: React.FC = () => {
                             name="description"
                             value={formData.description}
                             onChange={handleChange}
-                            className="w-full h-full min-h-[350px] bg-transparent resize-none focus:outline-none text-gray-300 font-mono text-sm leading-relaxed"
+                            className="w-full h-full min-h-[350px] bg-transparent resize-none focus:outline-none text-gray-300 font-mono text-base leading-relaxed"
                             placeholder="Start typing..."
                         />
                     ) : (

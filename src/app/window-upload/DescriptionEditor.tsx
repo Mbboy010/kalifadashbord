@@ -290,7 +290,7 @@ export default function DescriptionEditor({ value, onChange, onToast }: Descript
                   })}
                </div>
                
-               {/* ✅ Fix 1: Unselect / Reset Button */}
+               {/* Unselect / Reset Button */}
                <button
                   type="button"
                   onMouseDown={(e) => { e.preventDefault(); execCmd('foreColor', DEFAULT_TEXT_COLOR); setActiveMenu(null); }}
@@ -381,7 +381,8 @@ export default function DescriptionEditor({ value, onChange, onToast }: Descript
             
             empty:before:content-[attr(placeholder)] empty:before:text-gray-600
         "
-        placeholder="Type something amazing..."
+        // ✅ Type casting to allow placeholder prop
+        {...({ placeholder: "Type something amazing..." } as any)}
         style={{ whiteSpace: 'pre-wrap' }}
       />
       

@@ -104,7 +104,7 @@ const LoginComponent: React.FC = () => {
   if (isAuthenticated) return null;
 
   return (
-    <div className="min-h-screen w-full bg-[#050505] flex items-center justify-center relative overflow-hidden selection:bg-red-500/30">
+    <div className="min-h-screen w-full z-50 fixed bg-[#050505] flex items-center justify-center relative overflow-hidden selection:bg-red-500/30">
       
       {/* --- Ambient Background Effects --- */}
       <div className="absolute top-[-20%] left-[-10%] w-[500px] h-[500px] bg-red-600/10 rounded-full blur-[120px] pointer-events-none animate-pulse-slow"></div>

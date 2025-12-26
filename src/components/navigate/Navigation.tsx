@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation'; // ✅ Import usePathname
+import { usePathname } from 'next/navigation';
 import { MoreVertical, Settings, LogOut, LayoutDashboard, User } from 'lucide-react';
 import { gsap } from 'gsap';
 import { getAuth, onAuthStateChanged, signOut } from 'firebase/auth';
@@ -19,15 +19,11 @@ const ShinyText = ({ text }: { text: string }) => {
 };
 
 const Navigation: React.FC = () => {
-  const pathname = usePathname(); // ✅ Get current route
+  const pathname = usePathname();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null); // Start as null to avoid flashing
   const menuRef = useRef<HTMLDivElement | null>(null);
   const navRef = useRef<HTMLDivElement | null>(null);
-
-  // ✅ Check if navigation should be hidden
-  // Matches '/window-upload' strictly OR '/windows-files/...' (dynamic id)
-  const isHidden = pathname === '/window-upload' || pathname?.startsWith('/windows-files/');
 
   // Auth Listener
   useEffect(() => {
@@ -37,15 +33,26 @@ const Navigation: React.FC = () => {
     return () => unsubscribe();
   }, []);
 
-  // Entrance Animation
+  // ✅ LOGIC UPDATE: Determine when to hide
+  // Hide if:
+  // 1. Auth status is loading (null)
+  // 2. User is NOT authenticated (false)
+  // 3. User is on specific paths (like upload or file editing pages)
+  const shouldHideNav = 
+    isAuthenticated === null || // Waiting for auth check
+    isAuthenticated === false || // Not logged in
+    pathname === '/window-upload' || 
+    pathname?.startsWith('/windows-files/');
+
+  // Entrance Animation (Only run if we are showing the nav)
   useEffect(() => {
-    if (!isHidden && navRef.current) {
+    if (!shouldHideNav && navRef.current) {
       gsap.fromTo(navRef.current, 
         { y: -100, opacity: 0 },
         { y: 0, opacity: 1, duration: 1.2, ease: 'power4.out', delay: 0.2 }
       );
     }
-  }, [isHidden]); // Re-run if hidden state changes
+  }, [shouldHideNav]);
 
   // Menu Animation
   useEffect(() => {
@@ -84,8 +91,8 @@ const Navigation: React.FC = () => {
     }
   };
 
-  // ✅ Return null to hide navigation on specific pages
-  if (isHidden) {
+  // ✅ Return null if we should hide the nav
+  if (shouldHideNav) {
     return null;
   }
 
@@ -117,12 +124,10 @@ const Navigation: React.FC = () => {
         <div className="flex items-center gap-4">
           
           {/* User Status (Desktop) */}
-          {isAuthenticated && (
-            <div className="hidden sm:flex items-center gap-2 px-3 py-1 rounded-full bg-white/5 border border-white/5 text-xs text-gray-400">
-              <div className="w-2 h-2 rounded-full bg-green-500"></div>
-              <span>Admin Online</span>
-            </div>
-          )}
+          <div className="hidden sm:flex items-center gap-2 px-3 py-1 rounded-full bg-white/5 border border-white/5 text-xs text-gray-400">
+            <div className="w-2 h-2 rounded-full bg-green-500"></div>
+            <span>Admin Online</span>
+          </div>
 
           <div className="h-6 w-[1px] bg-white/10 hidden sm:block"></div>
 
@@ -145,17 +150,15 @@ const Navigation: React.FC = () => {
               className="absolute top-12 right-0 w-56 hidden bg-[#111] border border-[#222] rounded-2xl shadow-2xl overflow-hidden z-[60]"
             >
               <div className="p-2 space-y-1">
-                {isAuthenticated && (
-                   <div className="px-3 py-2 mb-2 bg-[#1a1a1a] rounded-xl flex items-center gap-3 border border-[#222]">
-                     <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-red-600 to-black flex items-center justify-center border border-white/10">
-                        <User className="w-4 h-4 text-white" />
-                     </div>
-                     <div>
-                       <p className="text-xs font-bold text-white">Administrator</p>
-                       <p className="text-[10px] text-gray-500">Access Granted</p>
-                     </div>
+                 <div className="px-3 py-2 mb-2 bg-[#1a1a1a] rounded-xl flex items-center gap-3 border border-[#222]">
+                   <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-red-600 to-black flex items-center justify-center border border-white/10">
+                      <User className="w-4 h-4 text-white" />
                    </div>
-                )}
+                   <div>
+                     <p className="text-xs font-bold text-white">Administrator</p>
+                     <p className="text-[10px] text-gray-500">Access Granted</p>
+                   </div>
+                 </div>
 
                 <Link
                   href="/settings"
@@ -168,23 +171,13 @@ const Navigation: React.FC = () => {
 
                 <div className="h-px bg-[#222] my-1 mx-2"></div>
 
-                {isAuthenticated ? (
-                  <button
-                    onClick={handleLogout}
-                    className="w-full flex items-center px-3 py-2.5 text-sm text-red-400 rounded-lg hover:bg-red-900/10 hover:text-red-300 transition-colors"
-                  >
-                    <LogOut className="h-4 w-4 mr-3" />
-                    Disconnect
-                  </button>
-                ) : (
-                  <Link 
-                    href="/login"
-                    className="flex items-center px-3 py-2.5 text-sm text-green-400 rounded-lg hover:bg-green-900/10 hover:text-green-300 transition-colors"
-                  >
-                     <User className="h-4 w-4 mr-3" />
-                     Login
-                  </Link>
-                )}
+                <button
+                  onClick={handleLogout}
+                  className="w-full flex items-center px-3 py-2.5 text-sm text-red-400 rounded-lg hover:bg-red-900/10 hover:text-red-300 transition-colors"
+                >
+                  <LogOut className="h-4 w-4 mr-3" />
+                  Disconnect
+                </button>
               </div>  
             </div>
           </div>

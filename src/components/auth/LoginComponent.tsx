@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Lock, User, Loader2, Eye, EyeOff, Mail } from 'lucide-react';
+import { Lock, User, Loader2, Eye, EyeOff, Mail, ArrowRight, ShieldCheck } from 'lucide-react';
 import { auth } from '@/server/firebaseApi';
 import { 
   signInWithEmailAndPassword, 
@@ -29,27 +29,19 @@ const LoginComponent: React.FC = () => {
 
   const router = useRouter();
 
-  // Auth state listener
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
-      if (user) {
-        setIsAuthenticated(true);
-      } else {
-        setIsAuthenticated(false);
-      }
+      setIsAuthenticated(!!user);
+      // Small delay to smooth out the loading transition
+      setTimeout(() => setIsLoading(false), 500);
     });
     return () => unsubscribe();
   }, [router]);
 
-  // Remove GSAP — use simple fade-in after auth check
-  useEffect(() => {
-    const timer = setTimeout(() => setIsLoading(false), 300);
-    return () => clearTimeout(timer);
-  }, []);
-
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
+    if (error) setError(null);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -60,10 +52,10 @@ const LoginComponent: React.FC = () => {
       await signInWithEmailAndPassword(auth, formData.email, formData.password);
     } catch (err: any) {
       const errorMessage = err.code === 'auth/user-not-found' 
-        ? 'No user found with this email.'
+        ? 'Account not found.'
         : err.code === 'auth/wrong-password'
-        ? 'Incorrect password.'
-        : err.message || 'Login failed. Please try again.';
+        ? 'Invalid credentials.'
+        : 'Authentication failed.';
       setError(errorMessage);
     } finally {
       setIsSubmitting(false);
@@ -78,193 +70,205 @@ const LoginComponent: React.FC = () => {
 
     try {
       await sendPasswordResetEmail(auth, resetEmail);
-      setResetSuccess('Password reset email sent! Check your inbox.');
+      setResetSuccess('Reset link sent to your email.');
       setTimeout(() => {
         setShowResetModal(false);
         setResetEmail('');
+        setResetSuccess(null);
       }, 3000);
     } catch (err: any) {
       setError(err.code === 'auth/user-not-found' 
-        ? 'No account found with this email.' 
-        : 'Failed to send reset email. Try again.'
+        ? 'No account found.' 
+        : 'Could not send email.'
       );
     } finally {
       setIsResetting(false);
     }
   };
 
-  // Loading state with fade-in
-  if (isAuthenticated === null || isLoading) {
+  // Full Screen Loader
+  if (isLoading || isAuthenticated === null) {
     return (
-      <section className="min-h-screen w-screen flex items-center justify-center bg-black/20 backdrop-blur z-[100] fixed top-0 left-0">
-        <div className="animate-spin">
-          <Loader2 className="h-10 w-10 text-red-500" />
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#050505]">
+        <div className="relative">
+            <div className="h-16 w-16 rounded-full border-4 border-red-900/30 border-t-red-600 animate-spin"></div>
+            <div className="absolute inset-0 flex items-center justify-center">
+                <ShieldCheck className="h-6 w-6 text-red-600 opacity-50" />
+            </div>
         </div>
-      </section>
+      </div>
     );
   }
 
-  // Redirect if authenticated
-  if (isAuthenticated) {
-    return null;
-  }
+  // If logged in, return null (Middleware/Page will handle redirect)
+  if (isAuthenticated) return null;
 
   return (
-    <>
-      {/* Main Login */}
-      <section className="min-h-screen w-screen flex items-center justify-center bg-black/20 fixed top-0 left-0 backdrop-blur z-[100]">
-        <div 
-          className={`
-            login-container w-full max-w-md p-6 bg-black/40 backdrop-blur-md 
-            rounded-xl shadow-lg border border-red-800/20
-            transition-all duration-500 ease-out
-            ${isLoading ? 'opacity-0 scale-95' : 'opacity-100 scale-100'}
-          `}
-        >
-          <form onSubmit={handleSubmit} className="space-y-6">
-            <h2 className="text-2xl font-bold text-red-500 text-center animate-fadeIn">
-              Login
-            </h2>
+    <div className="min-h-screen w-full bg-[#050505] flex items-center justify-center relative overflow-hidden selection:bg-red-500/30">
+      
+      {/* --- Ambient Background Effects --- */}
+      <div className="absolute top-[-20%] left-[-10%] w-[500px] h-[500px] bg-red-600/10 rounded-full blur-[120px] pointer-events-none animate-pulse-slow"></div>
+      <div className="absolute bottom-[-20%] right-[-10%] w-[600px] h-[600px] bg-blue-900/10 rounded-full blur-[120px] pointer-events-none"></div>
+      <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20 brightness-100 contrast-150 pointer-events-none"></div>
 
-            {/* Error Message */}
-            {error && (
-              <p className="text-red-400 text-sm text-center bg-red-800/30 p-2 rounded animate-slideDown">
-                {error}
-              </p>
-            )}
+      {/* --- Main Login Card --- */}
+      <div className="w-full max-w-md mx-4 relative z-10">
+        
+        {/* Glow behind card */}
+        <div className="absolute -inset-0.5 bg-gradient-to-r from-red-600 to-red-900 rounded-2xl blur opacity-20 transition duration-1000 group-hover:opacity-40"></div>
 
-            {/* Email Field */}
-            <div className="relative group">
-              <User className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5 transition-colors group-focus-within:text-red-400" />
-              <input
-                type="email"
-                name="email"
-                value={formData.email}
-                onChange={handleChange}
-                placeholder="Email"
-                className="w-full pl-10 pr-4 py-2 bg-black/20 border border-red-800/30 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-red-600 focus:border-transparent transition-all duration-300"
-                disabled={isSubmitting}
-              />
+        <div className="relative bg-[#0a0a0a]/80 backdrop-blur-xl border border-white/5 rounded-2xl shadow-2xl overflow-hidden">
+          
+          {/* Header */}
+          <div className="px-8 pt-10 pb-6 text-center">
+             <div className="mx-auto w-12 h-12 bg-gradient-to-br from-red-500 to-red-800 rounded-xl flex items-center justify-center shadow-lg shadow-red-900/20 mb-6 rotate-3">
+                <Lock className="text-white h-6 w-6" />
+             </div>
+             <h2 className="text-2xl font-bold text-white tracking-tight mb-2">Welcome Back</h2>
+             <p className="text-sm text-gray-400">Enter your credentials to access the terminal.</p>
+          </div>
+
+          <form onSubmit={handleSubmit} className="px-8 pb-10 space-y-5">
+            
+            {/* Error Display */}
+            <div className={`transition-all duration-300 overflow-hidden ${error ? 'max-h-20 opacity-100' : 'max-h-0 opacity-0'}`}>
+                <div className="bg-red-500/10 border-l-2 border-red-500 text-red-200 text-xs p-3 rounded-r">
+                   {error}
+                </div>
             </div>
 
-            {/* Password Field with Toggle */}
-            <div className="relative group">
-              <Lock className="absolute left-a top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5 transition-colors group-focus-within:text-red-400" />
-              <input
-                type={showPassword ? 'text' : 'password'}
-                name="password"
-                value={formData.password}
-                onChange={handleChange}
-                placeholder="Password"
-                className="w-full pl-10 pr-12 py-2 bg-black/20 border border-red-800/30 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-red-600 focus:border-transparent transition-all duration-300"
-                disabled={isSubmitting}
-              />
-              <button
-                type="button"
-                onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-red-400 transition-colors duration-200"
-                tabIndex={-1}
-              >
-                {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
-              </button>
+            {/* Email Input */}
+            <div className="space-y-1.5">
+               <label className="text-[10px] uppercase font-bold text-gray-500 tracking-widest ml-1">Email Address</label>
+               <div className="relative group">
+                  <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 group-focus-within:text-red-500 transition-colors">
+                     <User size={18} />
+                  </div>
+                  <input 
+                    type="email" 
+                    name="email"
+                    value={formData.email}
+                    onChange={handleChange}
+                    className="w-full bg-[#121212] border border-white/10 text-gray-200 text-sm rounded-lg pl-10 pr-4 py-3 focus:outline-none focus:border-red-500/50 focus:ring-1 focus:ring-red-500/50 transition-all placeholder:text-gray-600"
+                    placeholder="name@example.com"
+                  />
+               </div>
             </div>
 
-            {/* Forgot Password Link */}
-            <div className="text-right">
-              <button
-                type="button"
-                onClick={() => setShowResetModal(true)}
-                className="text-sm text-red-400 hover:text-red-300 underline-offset-2 hover:underline transition-all duration-200"
-              >
-                Forgot Password?
-              </button>
+            {/* Password Input */}
+            <div className="space-y-1.5">
+               <div className="flex justify-between items-center ml-1">
+                  <label className="text-[10px] uppercase font-bold text-gray-500 tracking-widest">Password</label>
+                  <button 
+                    type="button" 
+                    onClick={() => setShowResetModal(true)}
+                    className="text-xs text-red-500 hover:text-red-400 transition-colors"
+                  >
+                    Forgot?
+                  </button>
+               </div>
+               <div className="relative group">
+                  <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 group-focus-within:text-red-500 transition-colors">
+                     <Lock size={18} />
+                  </div>
+                  <input 
+                    type={showPassword ? 'text' : 'password'}
+                    name="password"
+                    value={formData.password}
+                    onChange={handleChange}
+                    className="w-full bg-[#121212] border border-white/10 text-gray-200 text-sm rounded-lg pl-10 pr-10 py-3 focus:outline-none focus:border-red-500/50 focus:ring-1 focus:ring-red-500/50 transition-all placeholder:text-gray-600"
+                    placeholder="••••••••"
+                  />
+                  <button 
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300 transition-colors"
+                  >
+                    {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                  </button>
+               </div>
             </div>
 
             {/* Submit Button */}
-            <button
-              type="submit"
-              disabled={isSubmitting || !formData.email || !formData.password}
-              className="w-full py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:bg-gray-500 disabled:cursor-not-allowed font-medium transition-all duration-300 flex items-center justify-center shadow-md hover:shadow-lg"
+            <button 
+                type="submit" 
+                disabled={isSubmitting}
+                className="w-full bg-gradient-to-r from-red-600 to-red-800 hover:from-red-500 hover:to-red-700 text-white font-medium py-3 rounded-lg shadow-lg shadow-red-900/20 active:scale-[0.98] transition-all duration-200 flex items-center justify-center gap-2 group disabled:opacity-70 disabled:cursor-not-allowed mt-4"
             >
-              {isSubmitting && <Loader2 className="h-5 w-5 animate-spin mr-2" />}
-              {isSubmitting ? 'Logging In...' : 'Login'}
+                {isSubmitting ? (
+                    <Loader2 className="animate-spin h-5 w-5" />
+                ) : (
+                    <>
+                      <span>Sign In</span>
+                      <ArrowRight size={16} className="group-hover:translate-x-1 transition-transform" />
+                    </>
+                )}
             </button>
+
           </form>
+          
+          {/* Footer Decoration */}
+          <div className="h-1 w-full bg-gradient-to-r from-transparent via-red-900/40 to-transparent"></div>
         </div>
-      </section>
+      </div>
 
-      {/* Forgot Password Modal */}
+      {/* --- Forgot Password Modal --- */}
       {showResetModal && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[200] p-4 animate-fadeIn">
-          <div className="bg-black/50 backdrop-blur-md border border-red-800/30 rounded-xl p-6 w-full max-w-md animate-slideUp">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-xl font-bold text-red-500">Reset Password</h3>
-              <button
-                onClick={() => {
-                  setShowResetModal(false);
-                  setResetEmail('');
-                  setError(null);
-                  setResetSuccess(null);
-                }}
-                className="text-gray-400 hover:text-white transition-colors text-2xl"
+        <div className="fixed inset-0 z-[100] flex items-center justify-center px-4">
+           {/* Backdrop */}
+           <div 
+             className="absolute inset-0 bg-black/80 backdrop-blur-sm transition-opacity" 
+             onClick={() => setShowResetModal(false)}
+           ></div>
+
+           <div className="relative w-full max-w-sm bg-[#0a0a0a] border border-white/10 rounded-xl shadow-2xl p-6 animate-in zoom-in-95 duration-200">
+              <div className="text-center mb-6">
+                 <div className="mx-auto w-10 h-10 bg-red-900/20 rounded-full flex items-center justify-center mb-3">
+                    <Mail className="text-red-500 h-5 w-5" />
+                 </div>
+                 <h3 className="text-lg font-bold text-white">Reset Password</h3>
+                 <p className="text-xs text-gray-400 mt-1">Enter your email to receive a recovery link.</p>
+              </div>
+
+              {resetSuccess ? (
+                  <div className="bg-green-500/10 border border-green-500/20 text-green-400 text-sm p-3 rounded-lg text-center mb-4 flex items-center justify-center gap-2">
+                     <ShieldCheck size={16} /> {resetSuccess}
+                  </div>
+              ) : (
+                  <form onSubmit={handlePasswordReset} className="space-y-4">
+                    <div className="relative group">
+                        <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 group-focus-within:text-white transition-colors h-4 w-4" />
+                        <input
+                            type="email"
+                            value={resetEmail}
+                            onChange={(e) => setResetEmail(e.target.value)}
+                            placeholder="Email address"
+                            className="w-full bg-[#151515] border border-white/10 rounded-lg pl-9 pr-3 py-2.5 text-sm text-white focus:outline-none focus:border-red-500/50 transition-colors placeholder:text-gray-600"
+                        />
+                    </div>
+                    {error && <p className="text-red-400 text-xs text-center">{error}</p>}
+                    
+                    <button 
+                        type="submit" 
+                        disabled={isResetting || !resetEmail}
+                        className="w-full bg-white text-black hover:bg-gray-200 font-medium py-2.5 rounded-lg text-sm transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+                    >
+                        {isResetting && <Loader2 className="animate-spin h-4 w-4" />}
+                        Send Link
+                    </button>
+                  </form>
+              )}
+
+              <button 
+                onClick={() => setShowResetModal(false)}
+                className="w-full mt-4 text-xs text-gray-500 hover:text-white transition-colors"
               >
-                ×
+                Cancel and go back
               </button>
-            </div>
-
-            <form onSubmit={handlePasswordReset} className="space-y-4">
-              <p className="text-gray-300 text-sm">
-                Enter your email address and we'll send you a link to reset your password.
-              </p>
-
-              <div className="relative group">
-                <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5 transition-colors group-focus-within:text-red-400" />
-                <input
-                  type="email"
-                  value={resetEmail}
-                  onChange={(e) => setResetEmail(e.target.value)}
-                  placeholder="Your email"
-                  className="w-full pl-10 pr-4 py-2 bg-black/20 border border-red-800/30 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-red-600 transition-all duration-300"
-                  required
-                  disabled={isResetting}
-                />
-              </div>
-
-              {error && (
-                <p className="text-red-400 text-sm bg-red-800/30 p-2 rounded animate-slideDown">{error}</p>
-              )}
-              {resetSuccess && (
-                <p className="text-green-400 text-sm bg-green-800/30 p-2 rounded animate-slideDown">{resetSuccess}</p>
-              )}
-
-              <div className="flex gap-3">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowResetModal(false);
-                    setResetEmail('');
-                    setError(null);
-                    setResetSuccess(null);
-                  }}
-                  className="flex-1 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-600 transition-colors duration-200"
-                  disabled={isResetting}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={isResetting || !resetEmail}
-                  className="flex-1 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors duration-200 flex items-center justify-center disabled:bg-gray-500"
-                >
-                  {isResetting && <Loader2 className="h-5 w-5 animate-spin mr-2" />}
-                  {isResetting ? 'Sending...' : 'Send Reset Link'}
-                </button>
-              </div>
-            </form>
-          </div>
+           </div>
         </div>
       )}
-    </>
+    </div>
   );
 };
 

@@ -2,17 +2,17 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { 
-  Minus, Tag, Monitor, Cpu, Shield, Star, Loader2, Link as LinkIcon, 
-  Type, Bold, Image as ImageIcon, UploadCloud, X, FileArchive, DollarSign, 
-  AlignCenter, Underline, CheckCircle2, Eye, Edit3, AlignLeft, 
-  Plus, LayoutGrid, HardDrive, Save
+  Tag, Monitor, Cpu, Shield, Star, Loader2, Link as LinkIcon, 
+  Image as ImageIcon, UploadCloud, X, FileArchive, DollarSign, 
+  HardDrive, Save, Edit3
 } from 'lucide-react';
 import { gsap } from 'gsap';
 import { useRouter, useParams } from 'next/navigation';
-// ✅ Real Backend Imports
 import { db } from '@/server/firebaseApi';
 import { doc, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { storage } from '@/server/appwrite';
+// ✅ Import the new editor
+import DescriptionEditor from './DescriptionEditor';
 
 // --- Interfaces ---
 interface ToolForm {
@@ -23,14 +23,14 @@ interface ToolForm {
   image: string | null;
   downloadFile: File | null;
   downloadUrl: string | null;
-  priceType: 'Free' | 'Paid';
+  priceType: 'Free' | 'Paid' | 'Trial' | 'Demo';
   price: number | null;
   os: string;
   architecture: string;
   date: string;
   rating: string;
   security: string;
-  screenshots: string[]; // URLs
+  screenshots: string[]; // Kept for data consistency, even if UI removed
   size: string;
   downloadType: 'file' | 'link';
 }
@@ -60,31 +60,6 @@ const cropAndResizeImage = (file: File, maxSize = 500): Promise<File> => {
   });
 };
 
-const resizeImage = (file: File, maxSize = 800): Promise<File> => {
-  return new Promise((resolve) => {
-    const img = new Image();
-    const reader = new FileReader();
-    reader.onload = (e) => (img.src = e.target?.result as string);
-    img.onload = () => {
-      let { width, height } = img;
-      if (width > height) {
-        if (width > maxSize) { height *= maxSize / width; width = maxSize; }
-      } else {
-        if (height > maxSize) { width *= maxSize / height; height = maxSize; }
-      }
-      const canvas = document.createElement('canvas');
-      canvas.width = width;
-      canvas.height = height;
-      const ctx = canvas.getContext('2d');
-      if (ctx) ctx.drawImage(img, 0, 0, width, height);
-      canvas.toBlob((blob) => {
-        if (blob) resolve(new File([blob], file.name.replace(/\.[^/.]+$/, '') + '.png', { type: 'image/png' }));
-      }, 'image/png', 1.0);
-    };
-    reader.readAsDataURL(file);
-  });
-};
-
 const toUrlString = (u: any): string => {
     if (!u) return '';
     if (typeof u === 'string') return u;
@@ -99,9 +74,13 @@ const uploadToAppwrite = async (file: File, bucketId: string) => {
     return toUrlString(url);
 };
 
-// --- Text Processing ---
+// --- Text Conversion Helper (For migration of old data) ---
 const convertToHtml = (text: string): string => {
-  let result = text || "";
+  if (!text) return "";
+  // If it already looks like HTML (has tags like <p, <div, <br), return as is
+  if (/<[a-z][\s\S]*>/i.test(text)) return text;
+
+  let result = text;
   result = result.replace(/\[center\](.*?)\[\/center\]/g, '<div class="text-center">$1</div>');
   result = result.replace(/\[underline\](.*?)\[\/underline\]/g, '<span class="underline underline-offset-4">$1</span>');
   result = result.replace(/\[bold\](.*?)\[\/bold\]/g, '<strong class="font-bold text-white">$1</strong>');
@@ -118,42 +97,11 @@ const convertToHtml = (text: string): string => {
   return result.replace(/\[\/?[a-zA-Z0-9= "]*\]/g, '');
 };
 
-const validateDescription = (text: string): boolean => {
-  if(!text) return true;
-  const pairedTags = ["center", "underline", "bold", "size", "color", "link"];
-  const selfClosingTags = ["bar"];
-  const tagPattern = /\[\/?[a-zA-Z]+(?:=[^\]]+)?(?: [^\]]+)?\/?\]/g;
-  const tags = text.match(tagPattern) || [];
-  const stack: string[] = [];
-
-  for (const tag of tags) {
-    const selfCloseMatch = tag.match(/^\[([a-zA-Z]+)\/\]$/);
-    if (selfCloseMatch) {
-      if (!selfClosingTags.includes(selfCloseMatch[1])) return false;
-      continue;
-    }
-    const openMatch = tag.match(/^\[([a-zA-Z]+)(?:=[^\]]+)?(?: [^\]]+)?\]$/);
-    if (openMatch) {
-      if (!pairedTags.includes(openMatch[1])) return false;
-      stack.push(openMatch[1]);
-      continue;
-    }
-    const closeMatch = tag.match(/^\[\/([a-zA-Z]+)\]$/);
-    if (closeMatch) {
-      if (!pairedTags.includes(closeMatch[1])) return false;
-      if (stack.pop() !== closeMatch[1]) return false;
-    }
-  }
-  return stack.length === 0;
-};
-
 // --- Main Edit Component ---
 const EditWindowPage: React.FC = () => {
   const router = useRouter();
   const params = useParams();
   const id = params?.id as string;
-  
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
   // State
@@ -167,12 +115,7 @@ const EditWindowPage: React.FC = () => {
   
   // Media State
   const [newImageFile, setNewImageFile] = useState<File | null>(null);
-  const [newScreenshots, setNewScreenshots] = useState<File[]>([]);
-  
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [progress, setProgress] = useState(0);
-  const [editorMode, setEditorMode] = useState<'write' | 'review'>('write');
-  const [linkUrl, setLinkUrl] = useState('');
 
   // 1. Fetch Data
   useEffect(() => {
@@ -183,13 +126,17 @@ const EditWindowPage: React.FC = () => {
             const snap = await getDoc(docRef);
             if (snap.exists()) {
                 const data = snap.data() as ToolForm;
+                
+                // Convert existing description to HTML if it's in old format
+                const htmlDescription = convertToHtml(data.description || '');
+
                 setFormData({
                     ...data,
                     id: snap.id,
                     priceType: data.priceType || 'Free',
                     downloadType: data.downloadType || 'file',
                     screenshots: data.screenshots || [],
-                    description: data.description || '' 
+                    description: htmlDescription 
                 });
             } else {
                 alert("Tool not found");
@@ -226,59 +173,12 @@ const EditWindowPage: React.FC = () => {
     }
   };
 
-  const handleNewScreenshots = async (e: React.ChangeEvent<HTMLInputElement>) => {
-     if(e.target.files) {
-         const files = Array.from(e.target.files);
-         const resized = await Promise.all(files.map(f => resizeImage(f, 800)));
-         setNewScreenshots(prev => [...prev, ...resized]);
-     }
-  };
-
-  const removeExistingScreenshot = (index: number) => {
-     setFormData(prev => ({
-         ...prev,
-         screenshots: prev.screenshots.filter((_, i) => i !== index)
-     }));
-  };
-
-  const removeNewScreenshot = (index: number) => {
-      setNewScreenshots(prev => prev.filter((_, i) => i !== index));
-  };
-
-  // Text Formatting
-  const applyTextFormat = (format: string) => {
-    const textarea = textareaRef.current;
-    if (!textarea) return;
-    const start = textarea.selectionStart;
-    const end = textarea.selectionEnd;
-    const selectedText = formData.description.substring(start, end);
-    let newText = formData.description;
-    let insertion = '';
-
-    if (format === 'link') {
-      if (!linkUrl) return alert('Enter URL first');
-      insertion = `[link href="${linkUrl}"]${selectedText || 'Link'}[/link]`;
-      setLinkUrl('');
-    } else if (format === 'bar') {
-      insertion = `[bar/]`;
-    } else if (format.includes('=')) {
-      const tag = format.split('=')[0];
-      insertion = `[${format}]${selectedText}[/${tag}]`;
-    } else {
-      insertion = `[${format}]${selectedText}[/${format}]`;
-    }
-    
-    newText = formData.description.substring(0, start) + insertion + formData.description.substring(end);
-    setFormData((prev) => ({ ...prev, description: newText }));
-  };
-
   // Update Logic
   const handleUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!validateDescription(formData.description)) return alert('Description tags invalid');
+    if (!formData.title || !formData.description) return alert('Please fill required fields');
     
     setIsSubmitting(true);
-    setProgress(10);
 
     try {
         const bucketId = process.env.NEXT_PUBLIC_STORAGE_BUCKET;
@@ -291,37 +191,24 @@ const EditWindowPage: React.FC = () => {
         if (newImageFile) {
             finalImageUrl = await uploadToAppwrite(newImageFile, bucketId);
         }
-        setProgress(40);
 
         // 2. Upload New Download File if changed
         if (formData.downloadType === 'file' && formData.downloadFile) {
             finalDownloadUrl = await uploadToAppwrite(formData.downloadFile, bucketId);
         }
-        setProgress(60);
 
-        // 3. Upload New Screenshots
-        const newScreenshotUrls = [];
-        for (const file of newScreenshots) {
-            const url = await uploadToAppwrite(file, bucketId);
-            newScreenshotUrls.push(url);
-        }
-        
-        // Combine existing (that weren't deleted) + new
-        const finalScreenshots = [...formData.screenshots, ...newScreenshotUrls];
-        setProgress(80);
-
-        // 4. Update Firestore
+        // 3. Update Firestore
         const docRef = doc(db, 'Windows-tools', id);
         await updateDoc(docRef, {
             ...formData,
             image: finalImageUrl,
             downloadUrl: finalDownloadUrl,
-            screenshots: finalScreenshots,
+            // We keep existing screenshots in DB, even if UI is removed, to prevent data loss
+            screenshots: formData.screenshots, 
             price: formData.priceType === 'Free' ? 0 : Number(formData.price),
             updatedAt: serverTimestamp()
         });
 
-        setProgress(100);
         alert('Tool Updated Successfully');
         router.push('/windows-tools');
 
@@ -333,7 +220,6 @@ const EditWindowPage: React.FC = () => {
     }
   };
 
-  // Styles
   const InputWrapper = ({ label, icon: Icon, children }: any) => (
     <div className="relative group">
       <label className="block text-[10px] uppercase font-bold text-gray-500 mb-1 tracking-widest">{label}</label>
@@ -345,6 +231,7 @@ const EditWindowPage: React.FC = () => {
       </div>
     </div>
   );
+  
   const baseInputClass = "w-full pl-9 pr-4 py-2.5 bg-[#1a1a1a] border border-[#333] rounded-lg text-sm text-gray-200 focus:outline-none focus:border-red-600 focus:ring-1 focus:ring-red-600 transition-all appearance-none";
 
   if (loading) return <div className="min-h-screen bg-[#090909] flex items-center justify-center text-white"><Loader2 className="animate-spin"/></div>;
@@ -370,7 +257,7 @@ const EditWindowPage: React.FC = () => {
         
         <form onSubmit={handleUpdate} className="space-y-8">
           
-          {/* 1. Header Details */}
+          {/* 1. Header Details (Expanded Options) */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div className="md:col-span-2 space-y-4">
                <InputWrapper label="Application Name" icon={Tag}>
@@ -384,20 +271,33 @@ const EditWindowPage: React.FC = () => {
                         <optgroup label="Windows">
                             <option value="Windows 11">Windows 11</option>
                             <option value="Windows 10">Windows 10</option>
+                            <option value="Windows 8.1">Windows 8.1</option>
                             <option value="Windows 7">Windows 7</option>
                         </optgroup>
-                        <optgroup label="Other">
-                            <option value="Linux">Linux</option>
-                            <option value="Android">Android</option>
+                        <optgroup label="Macintosh">
+                            <option value="macOS Sequoia">macOS Sequoia</option>
+                            <option value="macOS Sonoma">macOS Sonoma</option>
+                            <option value="macOS Ventura">macOS Ventura</option>
+                        </optgroup>
+                        <optgroup label="Linux / Unix">
+                            <option value="Ubuntu">Ubuntu</option>
+                            <option value="Kali Linux">Kali Linux</option>
+                            <option value="Linux Generic">Linux (Generic)</option>
+                        </optgroup>
+                        <optgroup label="Mobile">
+                            <option value="Android 14+">Android 14+</option>
+                            <option value="Android 10-13">Android 10-13</option>
+                            <option value="Android Legacy">Android (Legacy)</option>
                         </optgroup>
                     </select>
                  </InputWrapper>
                  <InputWrapper label="Architecture" icon={Cpu}>
                     <select name="architecture" value={formData.architecture} onChange={handleChange} className={baseInputClass}>
                       <option value="">Select Arch...</option>
-                      <option value="64 bit (x64)">64 bit</option>
-                      <option value="32 bit (x86)">32 bit</option>
-                      <option value="ARM64">ARM64</option>
+                      <option value="64 bit (x64)">64 bit (x64)</option>
+                      <option value="32 bit (x86)">32 bit (x86)</option>
+                      <option value="ARM64">ARM64 (M1/M2)</option>
+                      <option value="Universal">Universal</option>
                     </select>
                  </InputWrapper>
                </div>
@@ -405,16 +305,23 @@ const EditWindowPage: React.FC = () => {
                <div className="grid grid-cols-2 gap-4">
                  <InputWrapper label="Rating" icon={Star}>
                     <select name="rating" value={formData.rating} onChange={handleChange} className={baseInputClass}>
-                        <option value="5/5">5 Stars</option>
-                        <option value="4.5/5">4.5 Stars</option>
-                        <option value="4/5">4 Stars</option>
+                        <option value="">Select Rating...</option>
+                        <option value="5/5">5.0 Stars (Excellent)</option>
+                        <option value="4.5/5">4.5 Stars (Great)</option>
+                        <option value="4/5">4.0 Stars (Good)</option>
+                        <option value="3/5">3.0 Stars (Fair)</option>
+                        <option value="2/5">2.0 Stars (Poor)</option>
+                        <option value="1/5">1.0 Star (Bad)</option>
                     </select>
                  </InputWrapper>
                  <InputWrapper label="Security" icon={Shield}>
                     <select name="security" value={formData.security} onChange={handleChange} className={baseInputClass}>
-                        <option value="safe">Safe</option>
-                        <option value="medium">Medium</option>
-                        <option value="high">High</option>
+                        <option value="">Select Status...</option>
+                        <option value="safe">✅ Safe</option>
+                        <option value="medium">⚠️ Medium Risk</option>
+                        <option value="false_positive">🛡️ False Positive</option>
+                        <option value="untested">❓ Untested</option>
+                        <option value="high">⛔ High Risk</option>
                     </select>
                  </InputWrapper>
                </div>
@@ -439,83 +346,13 @@ const EditWindowPage: React.FC = () => {
             </div>
           </div>
 
-          {/* 2. MS Word Style Editor */}
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-                <label className="text-[10px] uppercase font-bold text-gray-500 tracking-widest">Description</label>
-                <div className="flex bg-[#1a1a1a] p-1 rounded-lg border border-[#333]">
-                  <button type="button" onClick={() => setEditorMode('write')} className={`px-3 py-1 text-xs font-medium rounded-md flex items-center gap-1.5 transition ${editorMode === 'write' ? 'bg-[#333] text-white' : 'text-gray-500'}`}><Edit3 size={12}/> Edit</button>
-                  <button type="button" onClick={() => setEditorMode('review')} className={`px-3 py-1 text-xs font-medium rounded-md flex items-center gap-1.5 transition ${editorMode === 'review' ? 'bg-[#333] text-white' : 'text-gray-500'}`}><Eye size={12}/> Preview</button>
-                </div>
-            </div>
+          {/* 2. Visual Description Editor (New) */}
+          <DescriptionEditor 
+            value={formData.description} 
+            onChange={(val) => setFormData(prev => ({ ...prev, description: val }))}
+          />
 
-            <div className="border border-[#333] rounded-xl overflow-hidden bg-[#111] shadow-2xl flex flex-col min-h-[400px]">
-              {/* Ribbon */}
-              <div className="bg-[#1a1a1a] border-b border-[#333] p-2 flex items-center gap-1 flex-wrap select-none">
-                 <div className="flex items-center gap-1 pr-2 border-r border-[#333] mr-2">
-                    <button type="button" onClick={() => applyTextFormat('bold')} className="p-1.5 text-gray-400 hover:bg-[#2a2a2a] hover:text-white rounded"><Bold size={16}/></button>
-                    <button type="button" onClick={() => applyTextFormat('underline')} className="p-1.5 text-gray-400 hover:bg-[#2a2a2a] hover:text-white rounded"><Underline size={16}/></button>
-                    <button type="button" onClick={() => applyTextFormat('size=lg')} className="p-1.5 text-gray-400 hover:bg-[#2a2a2a] hover:text-white rounded"><Type size={16}/></button>
-                 </div>
-                 <div className="flex items-center gap-2 px-2">
-                    <button type="button" onClick={() => applyTextFormat('color=red')} className="w-4 h-4 rounded-full bg-red-500"></button>
-                    <button type="button" onClick={() => applyTextFormat('color=blue')} className="w-4 h-4 rounded-full bg-blue-500"></button>
-                 </div>
-                 <div className="flex items-center gap-2">
-                    <input type="text" value={linkUrl} onChange={e => setLinkUrl(e.target.value)} placeholder="https://..." className="bg-[#0d0d0d] border border-[#333] rounded px-2 py-1 text-xs w-24 text-white focus:outline-none"/>
-                    <button type="button" onClick={() => applyTextFormat('link')} className="text-[10px] text-blue-400">LINK</button>
-                    <button type="button" onClick={() => applyTextFormat('bar')} className="p-1.5 text-gray-400 hover:bg-[#2a2a2a] rounded"><Minus size={16}/></button>
-                 </div>
-              </div>
-
-              {/* Editor */}
-              <div className="flex-1 bg-[#151515] p-6 overflow-y-auto">
-                 <div className="max-w-3xl mx-auto min-h-[350px] bg-[#0a0a0a] border border-[#222] p-8">
-                    {editorMode === 'write' ? (
-                        <textarea ref={textareaRef} name="description" value={formData.description} onChange={handleChange} className="w-full h-full bg-transparent resize-none focus:outline-none text-gray-300 font-mono text-sm leading-relaxed" />
-                    ) : (
-                        <div className="prose prose-invert prose-sm max-w-none" dangerouslySetInnerHTML={{ __html: convertToHtml(formData.description) }} />
-                    )}
-                 </div>
-              </div>
-            </div>
-          </div>
-
-          {/* 3. Visual Assets (Edit Logic) */}
-          <div className="bg-[#1a1a1a] border border-[#333] rounded-xl p-6">
-            <h3 className="text-sm font-bold text-white mb-4 flex items-center gap-2"><LayoutGrid size={16} className="text-yellow-500"/> Visual Assets</h3>
-            
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                {/* A. Dropzone for NEW images */}
-                <label className="aspect-video border-2 border-dashed border-[#333] rounded-lg flex flex-col items-center justify-center bg-[#111] hover:bg-[#222] cursor-pointer">
-                    <input type="file" multiple accept="image/*" onChange={handleNewScreenshots} className="hidden" />
-                    <Plus className="text-gray-500 mb-2" />
-                    <span className="text-[10px] text-gray-500">Add New</span>
-                </label>
-
-                {/* B. Existing Database Screenshots */}
-                {formData.screenshots.map((url, idx) => (
-                    <div key={`exist-${idx}`} className="relative group aspect-video bg-black rounded-lg overflow-hidden border border-[#333]">
-                        <img src={url} className="w-full h-full object-cover opacity-70" />
-                        <span className="absolute bottom-1 left-1 bg-blue-600 text-[9px] px-1 rounded text-white">Saved</span>
-                        {/* FIX: Use className instead of text-white */}
-                        <button type="button" onClick={() => removeExistingScreenshot(idx)} className="absolute top-1 right-1 bg-red-600 p-1 rounded-full opacity-0 group-hover:opacity-100 transition"><X size={12} className="text-white"/></button>
-                    </div>
-                ))}
-
-                {/* C. New Pending Screenshots */}
-                {newScreenshots.map((file, idx) => (
-                    <div key={`new-${idx}`} className="relative group aspect-video bg-black rounded-lg overflow-hidden border border-green-500/30">
-                        <img src={URL.createObjectURL(file)} className="w-full h-full object-cover" />
-                        <span className="absolute bottom-1 left-1 bg-green-600 text-[9px] px-1 rounded text-white">New</span>
-                        {/* FIX: Use className instead of text-white */}
-                        <button type="button" onClick={() => removeNewScreenshot(idx)} className="absolute top-1 right-1 bg-red-600 p-1 rounded-full opacity-0 group-hover:opacity-100 transition"><X size={12} className="text-white"/></button>
-                    </div>
-                ))}
-            </div>
-          </div>
-
-          {/* 4. Files */}
+          {/* 3. Files & Links */}
           <div className="bg-[#1a1a1a] p-6 rounded-xl border border-[#333]">
              <h3 className="text-sm font-bold text-white mb-4 flex items-center gap-2"><FileArchive size={16} className="text-red-500"/> Source File</h3>
              <div className="flex gap-2 mb-4">
@@ -525,12 +362,18 @@ const EditWindowPage: React.FC = () => {
              
              {formData.downloadType === 'file' ? (
                  <div className="space-y-2">
-                     <p className="text-xs text-gray-400">Current: {formData.size || 'Unknown'}</p>
-                     <input type="file" onChange={(e) => {
+                     <div className="flex justify-between items-center text-xs text-gray-400">
+                        <span>Current: {formData.size || 'Unknown'}</span>
+                     </div>
+                     <label className="text-[10px] uppercase font-bold text-gray-500 tracking-widest block mb-1">Replace Archive (.zip, .rar, .7z, .exe)</label>
+                     <input 
+                        type="file" 
+                        accept=".zip,.rar,.7z,.exe,.msi,.iso,.apk,.dmg,.bin,.tar,.gz"
+                        onChange={(e) => {
                          if(e.target.files?.[0]) {
                             setFormData(p => ({...p, downloadFile: e.target.files![0], size: (e.target.files![0].size / (1024*1024)).toFixed(2) + ' MB' }))
                          }
-                     }} className="block w-full text-xs text-gray-500 file:bg-[#333] file:text-white file:border-0 file:rounded-full file:px-4 file:py-2"/>
+                     }} className="block w-full text-xs text-gray-500 file:bg-[#333] file:text-white file:border-0 file:rounded-full file:px-4 file:py-2 hover:file:bg-[#444] cursor-pointer"/>
                  </div>
              ) : (
                  <div className="space-y-4">
@@ -544,12 +387,14 @@ const EditWindowPage: React.FC = () => {
              )}
           </div>
 
-          {/* 5. Pricing */}
+          {/* 4. Pricing */}
           <div className="bg-[#1a1a1a] p-6 rounded-xl border border-[#333]">
              <h3 className="text-sm font-bold text-white mb-4 flex items-center gap-2"><DollarSign size={16} className="text-green-500"/> Pricing</h3>
              <select name="priceType" value={formData.priceType} onChange={handleChange} className={`${baseInputClass} mb-3`}>
                  <option value="Free">Free</option>
                  <option value="Paid">Paid</option>
+                 <option value="Trial">Trial</option>
+                 <option value="Demo">Demo</option>
              </select>
              {formData.priceType === 'Paid' && <input type="number" name="price" value={formData.price || ''} onChange={handleChange} placeholder="NGN" className={baseInputClass} />}
           </div>
